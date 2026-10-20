@@ -34,8 +34,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => load(data.session));
+    // Supabase re-emits SIGNED_IN on tab focus and TOKEN_REFRESHED hourly. Only a change of
+    // user should reload the profile; otherwise just swap the session so the UI never remounts.
+    let currentUser: string | undefined;
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
-      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") { setLoading(true); load(s); }
+      const uid = s?.user.id;
+      if (event === "INITIAL_SESSION") { currentUser = uid; return; }
+      if (uid !== currentUser) { currentUser = uid; setLoading(true); load(s); }
+      else setSession(s);
     });
     return () => sub.subscription.unsubscribe();
   }, []);

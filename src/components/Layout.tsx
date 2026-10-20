@@ -1,8 +1,8 @@
-import { useState, type ReactNode } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
+import { NavLink, Outlet } from "react-router-dom";
 import { Building2, CalendarCheck, FileText, LayoutDashboard, LogOut, Menu, Settings, Users, X } from "lucide-react";
 import { useAuth } from "../lib/auth";
-import { cx, IconButton } from "./ui";
+import { cx, IconButton, Skeleton } from "./ui";
 import { initials } from "../lib/format";
 
 type Item = { to: string; label: string; icon: ReactNode; end?: boolean };
@@ -33,11 +33,29 @@ export function Logo({ light }: { light?: boolean }) {
   );
 }
 
+function PageSkeleton() {
+  return (
+    <div aria-busy="true" aria-label="Loading">
+      <Skeleton className="h-8 w-56" /><Skeleton className="mt-2 h-4 w-80" />
+      <div className="mt-6 grid gap-4 grid-cols-2 xl:grid-cols-4">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-[124px]" />)}</div>
+      <Skeleton className="mt-4 h-72" />
+    </div>
+  );
+}
+
 export default function Layout() {
   const { profile, firm, session, signOut } = useAuth();
   const [open, setOpen] = useState(false);
-  const loc = useLocation();
   const nav = profile?.role === "superadmin" ? adminNav : hrNav;
+
+  // Warm every page chunk after login so later navigation never waits on a download.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (profile?.role === "superadmin") { import("../pages/admin/Overview"); import("../pages/admin/Firms"); import("../pages/admin/FirmDetail"); }
+      else { import("../pages/hr/Dashboard"); import("../pages/hr/Attendance"); import("../pages/hr/Employees"); import("../pages/hr/Payroll"); import("../pages/hr/Settings"); }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [profile?.role]);
   const name = profile?.role === "superadmin" ? (profile.full_name || "Super Admin") : (firm?.name ?? "");
 
   const sidebar = (
@@ -91,8 +109,8 @@ export default function Layout() {
           <IconButton label="Open menu" onClick={() => setOpen(true)}><Menu className="size-5" /></IconButton>
           <Logo />
         </header>
-        <main id="main" key={loc.pathname} className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 lg:px-10 lg:py-9">
-          <Outlet />
+        <main id="main" className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 lg:px-10 lg:py-9">
+          <Suspense fallback={<PageSkeleton />}><Outlet /></Suspense>
         </main>
       </div>
     </div>
