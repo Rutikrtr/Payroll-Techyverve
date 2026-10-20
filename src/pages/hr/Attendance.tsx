@@ -35,6 +35,12 @@ function Daily() {
   const [q, setQ] = useState("");
   const [saving, setSaving] = useState<string | null>(null);
   const [bulk, setBulk] = useState(false);
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
+  const [branch, setBranch] = useState("all");
+
+  useEffect(() => {
+    if (firm?.multi_branch) supabase.from("branches").select("id, name").order("name").then(({ data }) => setBranches(data ?? []));
+  }, [firm?.multi_branch]);
 
   useEffect(() => {
     supabase.from("attendance").select("*").eq("date", date).then(({ data }) => setRows(new Map((data ?? []).map((a) => [a.employee_id, a]))));
@@ -75,7 +81,7 @@ function Daily() {
   }
 
   async function markAll(status: AttStatus) {
-    const unmarked = (employees ?? []).filter((e) => !rows.has(e.id));
+    const unmarked = (employees ?? []).filter((e) => !rows.has(e.id) && (branch === "all" || e.branch_id === branch));
     if (!unmarked.length) return toast("ok", "Everyone is already marked for this day");
     setBulk(true);
     const payload = unmarked.map((e) => ({
@@ -90,7 +96,9 @@ function Daily() {
     toast("ok", `Marked ${unmarked.length} employee${unmarked.length > 1 ? "s" : ""} as ${STATUS[status].label.toLowerCase()}`);
   }
 
-  const list = (employees ?? []).filter((e) => [e.full_name, e.emp_code, e.department].some((v) => v?.toLowerCase().includes(q.toLowerCase())));
+  const list = (employees ?? [])
+    .filter((e) => branch === "all" || e.branch_id === branch)
+    .filter((e) => [e.full_name, e.emp_code, e.department].some((v) => v?.toLowerCase().includes(q.toLowerCase())));
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
     rows.forEach((a) => { c[a.status] = (c[a.status] ?? 0) + 1; });
@@ -137,7 +145,12 @@ function Daily() {
             <Search className="size-4 text-ink-4" aria-hidden />
             <input aria-label="Search employees" className="h-8 flex-1 bg-transparent outline-none placeholder:text-ink-4" placeholder="Search employee…" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            {branches.length > 0 && (
+              <select aria-label="Filter by branch" className="input h-8 w-auto text-[13px]" value={branch} onChange={(e) => setBranch(e.target.value)}>
+                <option value="all">All branches</option>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            )}
             <Button size="sm" variant="secondary" loading={bulk} icon={<CheckCheck className="size-4" />} onClick={() => markAll("present")}>Mark unmarked present</Button>
             <Button size="sm" variant="secondary" onClick={() => markAll("absent")}>Mark unmarked absent</Button>
           </div>

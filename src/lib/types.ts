@@ -1,9 +1,12 @@
-export type Role = "superadmin" | "hr";
+export type Role = "superadmin" | "hr" | "branch" | "employee";
 
-export interface Profile { id: string; role: Role; firm_id: string | null; full_name: string | null }
+export interface Profile {
+  id: string; role: Role; firm_id: string | null; full_name: string | null;
+  branch_id: string | null; employee_id: string | null; login_id: string | null;
+}
 
 export interface Firm {
-  id: string; name: string; legal_name: string | null; industry: string | null;
+  id: string; code: string; multi_branch: boolean; name: string; legal_name: string | null; industry: string | null;
   address: string | null; city: string | null; state: string | null; pincode: string | null; country: string | null;
   gstin: string | null; pan: string | null; tan: string | null; pf_code: string | null; esi_code: string | null;
   contact_name: string | null; contact_email: string | null; contact_phone: string | null;
@@ -17,7 +20,7 @@ export interface CustomComponent {
 export type SlipTemplate = "classic" | "modern" | "compact";
 
 export interface FirmSettings {
-  firm_id: string; currency: string;
+  firm_id: string;
   weekly_offs: number[]; shift_start: string; shift_end: string; late_grace_minutes: number;
   lates_per_half_day: number; half_day_min_hours: number; unmarked_as: "absent" | "present"; paid_leaves_per_month: number;
   lop_basis: "calendar" | "working" | "fixed30"; ot_enabled: boolean; ot_multiplier: number; standard_hours: number;
@@ -27,7 +30,7 @@ export interface FirmSettings {
   tds_enabled: boolean; tds_rate: number;
   custom_components: CustomComponent[];
   slip_template: SlipTemplate; slip_accent: string; slip_show_bank: boolean; slip_show_attendance: boolean;
-  slip_show_ytd: boolean; slip_show_logo: boolean; slip_amount_in_words: boolean; slip_footer: string;
+  slip_show_logo: boolean; slip_amount_in_words: boolean; slip_footer: string;
 }
 
 export interface Employee {
@@ -36,8 +39,10 @@ export interface Employee {
   pan: string | null; uan: string | null; esi_number: string | null;
   bank_name: string | null; bank_account: string | null; ifsc: string | null;
   basic: number; hra: number; conveyance: number; special_allowance: number; other_allowance: number;
-  pf_applicable: boolean; esi_applicable: boolean; status: "active" | "inactive";
+  pf_applicable: boolean; esi_applicable: boolean; status: "active" | "inactive"; branch_id: string | null;
 }
+
+export interface Branch { id: string; firm_id: string; name: string; address: string | null; created_at: string }
 
 export type AttStatus = "present" | "absent" | "half_day" | "paid_leave" | "unpaid_leave" | "holiday" | "week_off";
 

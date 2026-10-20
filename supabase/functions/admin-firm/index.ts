@@ -1,5 +1,5 @@
 // Superadmin-only: create a firm together with its single HR login,
-// reset the HR password, or delete a firm (and its HR user).
+// reset the HR password, or delete a firm (and every login that belongs to it).
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
 const cors = {
@@ -31,9 +31,12 @@ Deno.serve(async (req) => {
       const { firm, hr_password } = body;
       if (!firm?.name || !firm?.hr_email || !hr_password || hr_password.length < 8)
         return json({ error: "Firm name, HR email and a password of 8+ characters are required" }, 400);
+      firm.code = String(firm.code ?? "").toLowerCase();
+      if (!/^[a-z0-9]{2,12}$/.test(firm.code))
+        return json({ error: "Firm code must be 2–12 lowercase letters or digits" }, 400);
 
       const { data: created, error: fErr } = await admin.from("firms").insert(firm).select().single();
-      if (fErr) throw fErr;
+      if (fErr) throw new Error(fErr.code === "23505" ? "That firm code is already used by another firm" : fErr.message);
 
       const { data: u, error: uErr } = await admin.auth.admin.createUser({
         email: firm.hr_email,

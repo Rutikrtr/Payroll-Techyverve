@@ -1,11 +1,11 @@
 import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { Building2, CalendarCheck, FileText, LayoutDashboard, LogOut, Menu, Settings, Users, X } from "lucide-react";
+import { Building, Building2, CalendarCheck, FileText, LayoutDashboard, LogOut, Menu, Settings, Users, X } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { cx, IconButton, Skeleton } from "./ui";
 import { initials } from "../lib/format";
 
-type Item = { to: string; label: string; icon: ReactNode; end?: boolean };
+type Item = { to: string; label: string; icon: ReactNode; end?: boolean; multiOnly?: boolean };
 
 const adminNav: Item[] = [
   { to: "/admin", label: "Overview", icon: <LayoutDashboard className="size-[18px]" />, end: true },
@@ -15,6 +15,7 @@ const hrNav: Item[] = [
   { to: "/app", label: "Dashboard", icon: <LayoutDashboard className="size-[18px]" />, end: true },
   { to: "/app/attendance", label: "Attendance", icon: <CalendarCheck className="size-[18px]" /> },
   { to: "/app/employees", label: "Employees", icon: <Users className="size-[18px]" /> },
+  { to: "/app/branches", label: "Branches", icon: <Building className="size-[18px]" />, multiOnly: true },
   { to: "/app/payroll", label: "Payroll & Slips", icon: <FileText className="size-[18px]" /> },
   { to: "/app/settings", label: "Settings", icon: <Settings className="size-[18px]" /> },
 ];
@@ -46,13 +47,13 @@ function PageSkeleton() {
 export default function Layout() {
   const { profile, firm, session, signOut } = useAuth();
   const [open, setOpen] = useState(false);
-  const nav = profile?.role === "superadmin" ? adminNav : hrNav;
+  const nav = profile?.role === "superadmin" ? adminNav : hrNav.filter((n) => !n.multiOnly || firm?.multi_branch);
 
   // Warm every page chunk after login so later navigation never waits on a download.
   useEffect(() => {
     const t = setTimeout(() => {
       if (profile?.role === "superadmin") { import("../pages/admin/Overview"); import("../pages/admin/Firms"); import("../pages/admin/FirmDetail"); }
-      else { import("../pages/hr/Dashboard"); import("../pages/hr/Attendance"); import("../pages/hr/Employees"); import("../pages/hr/Payroll"); import("../pages/hr/Settings"); }
+      else { import("../pages/hr/Dashboard"); import("../pages/hr/Attendance"); import("../pages/hr/Employees"); import("../pages/hr/Branches"); import("../pages/hr/Payroll"); import("../pages/hr/Settings"); }
     }, 300);
     return () => clearTimeout(t);
   }, [profile?.role]);

@@ -1,8 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, CalendarCheck, Eye, EyeOff, FileText, ShieldCheck } from "lucide-react";
-import { supabase } from "../lib/supabase";
-import { useAuth } from "../lib/auth";
+import { loginEmail, supabase } from "../lib/supabase";
+import { HOME, useAuth } from "../lib/auth";
 import { Button, Field } from "../components/ui";
 import { Logo } from "../components/Layout";
 
@@ -17,9 +17,13 @@ export default function Login() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
+  const [params] = useSearchParams();
+  const next = params.get("next");
+
   useEffect(() => { supabase.rpc("setup_required").then(({ data }) => setSetup(!!data)); }, []);
 
-  if (!loading && session && profile) return <Navigate to={profile.role === "superadmin" ? "/admin" : "/app"} replace />;
+  // Only follow ?next= to an in-app path (never an absolute URL).
+  if (!loading && session && profile) return <Navigate to={next?.startsWith("/") && !next.startsWith("//") ? next : HOME[profile.role]} replace />;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -30,8 +34,8 @@ export default function Login() {
       else if (!data.session) setNotice("Super admin created. Check your inbox to confirm the email, then sign in.");
       setSetup(false);
     } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) setError(error.message === "Invalid login credentials" ? "Email or password is incorrect." : error.message);
+      const { error } = await supabase.auth.signInWithPassword({ email: loginEmail(email), password });
+      if (error) setError(error.message === "Invalid login credentials" ? "Login ID / email or password is incorrect." : error.message);
     }
     setBusy(false);
   }
@@ -70,7 +74,7 @@ export default function Login() {
           <div className="lg:hidden mb-10"><Logo /></div>
           <h2 className="text-[28px] font-medium tracking-[-0.02em]">{setup ? "Set up your platform" : "Welcome back"}</h2>
           <p className="mt-1.5 text-ink-3">
-            {setup ? "Create the super admin account. You'll use it to onboard firms." : "Sign in with your firm's HR login or the super admin account."}
+            {setup ? "Create the super admin account. You'll use it to onboard firms." : "Sign in with your admin email, or the branch / employee login ID your admin gave you."}
           </p>
 
           <form onSubmit={submit} className="mt-8 space-y-4" noValidate={false}>
@@ -79,8 +83,9 @@ export default function Login() {
                 <input className="input" required value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
               </Field>
             )}
-            <Field label="Email">
-              <input className="input" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" placeholder="hr@yourfirm.com" />
+            <Field label={setup ? "Email" : "Email or login ID"} hint={setup ? undefined : "Branch and employee accounts use a login ID like techyverve-emp001."}>
+              <input className="input" type={setup ? "email" : "text"} required value={email} onChange={(e) => setEmail(e.target.value)}
+                autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder={setup ? "you@company.com" : "hr@yourfirm.com or techyverve-emp001"} />
             </Field>
             <Field label="Password" hint={setup ? "At least 8 characters." : undefined}>
               <div className="relative">

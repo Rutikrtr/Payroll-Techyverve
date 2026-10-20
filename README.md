@@ -19,6 +19,13 @@ Multi-tenant payroll SaaS. A **super admin** onboards firms; each firm gets **on
 - Payslip format: Classic / Modern / Compact templates, brand colour, toggles (logo, bank, attendance, amount in words), footer, live preview
 - Payroll: run, review, recalculate, finalize/lock, preview, print or save PDF (one or all), bank-transfer CSV, history
 
+**Multi-branch firms** (chosen by the super admin per firm)
+- Firm admin creates branches; each branch gets a kiosk login (`<firmcode>-<name>`) that shows only company info, a QR that changes daily, and that day's check-in / check-out list
+- Admin assigns employees to branches and creates employee logins (`<firmcode>-<empcode>`)
+- Employees scan their own branch's QR (phone camera or in-app scanner): first scan checks in (late detection), second checks out (short day → half day)
+- Employees see their attendance history and finalized payslips (view / PDF)
+- The QR is an HMAC of branch + date signed with a per-branch secret, verified server-side in `scan_attendance`
+
 ## Setup
 
 ```bash

@@ -1,7 +1,10 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
-import type { Firm, Profile } from "./types";
+import type { Firm, Profile, Role } from "./types";
+
+/** Landing page for each role. */
+export const HOME: Record<Role, string> = { superadmin: "/admin", hr: "/app", branch: "/branch", employee: "/me" };
 
 interface AuthState {
   session: Session | null;

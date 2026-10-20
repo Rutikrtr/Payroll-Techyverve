@@ -35,7 +35,7 @@ export default function FirmDetail() {
 
   async function save(e: FormEvent) {
     e.preventDefault(); setBusy(true);
-    const { id: _id, created_at, hr_email, status, ...rest } = edit as Firm;
+    const { id: _id, created_at, hr_email, status, code, ...rest } = edit as Firm;
     const clean = Object.fromEntries(Object.entries(rest).map(([k, v]) => [k, v === "" ? null : v]));
     const { error } = await supabase.from("firms").update(clean).eq("id", id!);
     setBusy(false);
@@ -89,6 +89,7 @@ export default function FirmDetail() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <section className="card p-5"><h2 className="eyebrow mb-2">Company</h2><dl className="text-[14px]">
+          <Row k="Workspace" v={firm.multi_branch ? "Multi-branch" : "Single branch"} /><Row k="Firm code" v={firm.code} />
           <Row k="Legal name" v={firm.legal_name} /><Row k="Industry" v={firm.industry} />
           <Row k="Address" v={[firm.address, firm.city, firm.state, firm.pincode].filter(Boolean).join(", ")} /><Row k="Country" v={firm.country} />
         </dl></section>

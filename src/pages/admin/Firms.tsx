@@ -79,7 +79,7 @@ export default function Firms() {
                           <div className="flex size-9 items-center justify-center rounded-lg bg-wine-50 text-[13px] font-semibold text-wine-700">{initials(f.name)}</div>
                           <div>
                             <Link to={`/admin/firms/${f.id}`} className="font-medium hover:text-wine-700" onClick={(e) => e.stopPropagation()}>{f.name}</Link>
-                            <div className="text-[12px] text-ink-3">{[f.industry, f.city].filter(Boolean).join(" · ") || "—"}</div>
+                            <div className="text-[12px] text-ink-3">{[f.multi_branch ? "Multi-branch" : "Single branch", f.industry, f.city].filter(Boolean).join(" · ")}</div>
                           </div>
                         </div>
                       </td>

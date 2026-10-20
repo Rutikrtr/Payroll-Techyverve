@@ -1,11 +1,11 @@
-import type { ChangeEvent, ReactNode } from "react";
+import { useRef, type ChangeEvent, type ReactNode } from "react";
 import { Field } from "../../components/ui";
 import type { Firm } from "../../lib/types";
 
 export type FirmDraft = Partial<Firm>;
 
 export const emptyFirm: FirmDraft = {
-  name: "", legal_name: "", industry: "", address: "", city: "", state: "", pincode: "", country: "India",
+  name: "", code: "", multi_branch: false, legal_name: "", industry: "", address: "", city: "", state: "", pincode: "", country: "India",
   gstin: "", pan: "", tan: "", pf_code: "", esi_code: "", contact_name: "", contact_email: "", contact_phone: "",
   hr_email: "", employee_limit: 50,
 };
@@ -20,14 +20,33 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 export default function FirmForm({ value, onChange, showHr }: { value: FirmDraft; onChange: (v: FirmDraft) => void; showHr?: { password: string; setPassword: (p: string) => void } }) {
+  const codeTouched = useRef(false);
   const f = (k: keyof Firm) => ({
     value: (value[k] as string | number | null) ?? "",
     onChange: (e: ChangeEvent<HTMLInputElement>) => onChange({ ...value, [k]: e.target.type === "number" ? Number(e.target.value) : e.target.value }),
   });
+  const creating = !!showHr;
   return (
     <div className="space-y-7">
+      <fieldset>
+        <legend className="eyebrow mb-3">Workspace type</legend>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {([[false, "Single branch", "One HR admin login manages everything. HR marks attendance."],
+            [true, "Multi-branch", "Admin creates branches with QR check-in kiosks and gives employees their own logins."]] as const).map(([v, t, d]) => (
+            <button key={t} type="button" aria-pressed={!!value.multi_branch === v} onClick={() => onChange({ ...value, multi_branch: v })}
+              className={`rounded-xl p-4 text-left ring-1 transition-all cursor-pointer ${!!value.multi_branch === v ? "bg-wine-50 ring-2 ring-wine-600" : "bg-white ring-line hover:ring-ink-4"}`}>
+              <div className="font-medium">{t}</div><div className="mt-1 text-[12px] text-ink-3">{d}</div>
+            </button>
+          ))}
+        </div>
+      </fieldset>
       <Section title="Company">
-        <Field label="Firm name *"><input className="input" required {...f("name")} placeholder="Acme Solutions" /></Field>
+        <Field label="Firm name *"><input className="input" required {...f("name")} placeholder="Acme Solutions"
+          onChange={(e) => onChange({ ...value, name: e.target.value, ...(creating && !codeTouched.current ? { code: e.target.value.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 12) } : {}) })} /></Field>
+        <Field label="Firm code *" hint={creating ? "Prefix of every branch & employee login ID, e.g. acme-emp001. Can't be changed later." : "Used in login IDs. Can't be changed."}>
+          <input className="input lowercase" required pattern="[a-z0-9]{2,12}" title="2–12 lowercase letters or digits" disabled={!creating}
+            value={value.code ?? ""} onChange={(e) => { codeTouched.current = true; onChange({ ...value, code: e.target.value.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 12) }); }} />
+        </Field>
         <Field label="Legal name"><input className="input" {...f("legal_name")} placeholder="Acme Solutions Pvt. Ltd." /></Field>
         <Field label="Industry"><input className="input" {...f("industry")} placeholder="IT Services" /></Field>
         <Field label="Employee limit" hint="Maximum active employees on this plan"><input className="input num" type="number" min={1} {...f("employee_limit")} /></Field>
