@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { -webkit-font-smoothing: antialiased; }
+  body { @apply bg-canvas text-ink font-sans text-[14px] leading-normal; }
+  h1, h2, h3, h4 { @apply font-display tracking-tight text-ink; }
+  .num { font-variant-numeric: tabular-nums; }
+  :focus-visible { outline: 2px solid #8a2546; outline-offset: 2px; border-radius: 6px; }
+  button, a, [role="button"], select, input[type="checkbox"] { touch-action: manipulation; }
+}
+
+@layer components {
+  .card { @apply bg-white rounded-xl shadow-card; }
+  .input {
+    @apply w-full h-10 rounded-lg border border-line bg-white px-3 text-[14px] text-ink placeholder:text-ink-4
+      transition-colors hover:border-ink-4 focus:border-wine-600 focus:outline-none focus:ring-4 focus:ring-wine-100
+      disabled:bg-canvas disabled:text-ink-3;
+  }
+  .label { @apply block text-[13px] font-medium text-ink-2 mb-1.5; }
+  .eyebrow { @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-3; }
+  .th { @apply px-4 py-2.5 text-left text-[12px] font-medium text-ink-3 bg-[#fafaf9] border-b border-line whitespace-nowrap; }
+  .td { @apply px-4 py-3 border-b border-line/70 align-middle; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+.skeleton { position: relative; overflow: hidden; background: #eeece9; border-radius: 6px; }
+.skeleton::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.6), transparent); animation: shimmer 1.4s infinite; }
+
+@keyframes pop-in { from { opacity: 0; transform: translateY(6px) scale(.98); } to { opacity: 1; transform: none; } }
+.animate-pop { animation: pop-in .18s ease-out; }
+
+@media print {
+  @page { size: A4; margin: 12mm; }
+  body { background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .no-print { display: none !important; }
+  .slip-page { break-after: page; box-shadow: none !important; margin: 0 !important; }
+  .slip-page:last-child { break-after: auto; }
+}
