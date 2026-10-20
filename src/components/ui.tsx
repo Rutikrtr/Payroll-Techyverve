@@ -101,14 +101,18 @@ export function Modal({ open, onClose, title, description, children, footer, wid
   open: boolean; onClose: () => void; title: string; description?: string; children: ReactNode; footer?: ReactNode; wide?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // Keep the latest onClose without re-running the effect: callers pass inline
+  // arrows, and re-running would steal focus back to the first field on every keystroke.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && closeRef.current();
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
-    ref.current?.querySelector<HTMLElement>("input,select,textarea,button")?.focus();
+    ref.current?.querySelector<HTMLElement>("input,select,textarea")?.focus();
     return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
-  }, [open, onClose]);
+  }, [open]);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6">
