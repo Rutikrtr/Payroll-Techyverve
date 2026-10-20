@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { CalendarCheck, ChevronLeft, ChevronRight, Eye, FileText, LogIn, LogOut, Printer, ScanLine } from "lucide-react";
+import { CalendarCheck, ChevronLeft, ChevronRight, FileText, LogIn, LogOut, Printer, ScanLine } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import PortalLayout from "../../components/PortalLayout";
 import Payslip from "../../components/Payslip";
-import { Badge, Button, cx, Empty, IconButton, Modal, Skeleton, Tabs } from "../../components/ui";
+import { Badge, Button, cx, Empty, IconButton, Skeleton, Tabs } from "../../components/ui";
 import { STATUS, useSettings } from "../../lib/hooks";
 import { dayKind } from "../../lib/payroll";
 import { daysInMonth, firstOfMonth, money, monthLabel, parseYmd, today, ymd } from "../../lib/format";
@@ -39,7 +39,7 @@ export default function MeHome() {
         <div className="mt-5">
           {tab === "today" && <Today me={me} />}
           {tab === "attendance" && <MyAttendance me={me} />}
-          {tab === "payslips" && <MyPayslips />}
+          {tab === "payslips" && <MyPayslips me={me} />}
         </div>
       </>)}
     </PortalLayout>
@@ -146,36 +146,125 @@ function MyAttendance({ me }: { me: Employee }) {
   );
 }
 
-function MyPayslips() {
+function MyPayslips({ me }: { me: Employee }) {
   const { firm } = useAuth();
   const { settings } = useSettings();
   const [slips, setSlips] = useState<Slip[] | null>(null);
-  const [open, setOpen] = useState<Slip | null>(null);
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [selected, setSelected] = useState<string | null>(null);
+
   useEffect(() => {
-    supabase.from("payslips").select("*").order("month", { ascending: false }).then(({ data }) => setSlips(data ?? []));
+    supabase.from("payslips").select("*").order("month", { ascending: false }).then(({ data }) => {
+      const list = data ?? [];
+      setSlips(list);
+      if (list[0]) { setSelected(list[0].month); setYear(parseYmd(list[0].month).getFullYear()); }
+    });
   }, []);
 
-  if (slips === null) return <Skeleton className="h-48" />;
-  if (!slips.length) return <div className="card"><Empty icon={<FileText className="size-6" />} title="No payslips yet" body="Your payslip appears here once HR finalizes the month's payroll." /></div>;
+  const byMonth = useMemo(() => new Map((slips ?? []).map((x) => [x.month, x])), [slips]);
+  if (slips === null) return <div className="space-y-4"><Skeleton className="h-28" /><Skeleton className="h-64" /></div>;
+
+  const thisMonth = firstOfMonth();
+  const joinMonth = me.date_of_joining ? `${me.date_of_joining.slice(0, 7)}-01` : null;
+  const lastYear = new Date().getFullYear();
+  const firstYear = Math.min(lastYear, joinMonth ? parseYmd(joinMonth).getFullYear() : lastYear, ...slips.map((x) => parseYmd(x.month).getFullYear()));
+
+  const months = Array.from({ length: 12 }, (_, i) => ymd(new Date(year, i, 1)));
+  const yearSlips = months.map((m) => byMonth.get(m)).filter((x): x is Slip => !!x);
+  const maxNet = Math.max(1, ...yearSlips.map((x) => Number(x.net_pay)));
+  const yearNet = yearSlips.reduce((t, x) => t + Number(x.net_pay), 0);
+  const yearGross = yearSlips.reduce((t, x) => t + Number(x.gross), 0);
+  const latest = slips[0];
+  const open = selected ? byMonth.get(selected) : undefined;
+  const pdf = (s: Slip) => window.open(`/me/slips/${s.run_id}`, "_blank");
+
   return (
-    <>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {slips.map((s) => (
-          <section key={s.id} className="card flex flex-col p-5">
-            <div className="text-[13px] text-ink-3">{monthLabel(s.month)}</div>
-            <div className="num mt-1 font-display text-[28px] font-medium tracking-[-0.02em]">{money(Number(s.net_pay))}</div>
-            <div className="num text-[12px] text-ink-3">Gross {money(Number(s.gross))} · Deductions {money(Number(s.total_deductions))} · {s.snapshot.attendance.paid_days}/{s.snapshot.attendance.basis_days} days</div>
-            <div className="mt-4 flex gap-2">
-              <Button size="sm" variant="secondary" className="flex-1" icon={<Eye className="size-4" />} onClick={() => setOpen(s)}>View</Button>
-              <Button size="sm" className="flex-1" icon={<Printer className="size-4" />} onClick={() => window.open(`/me/slips/${s.run_id}`, "_blank")}>PDF</Button>
-            </div>
-          </section>
-        ))}
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="relative overflow-hidden rounded-2xl bg-wine-700 p-5 text-white shadow-card">
+          <div className="pointer-events-none absolute -right-10 -top-12 size-40 rounded-full bg-white/10 blur-2xl" aria-hidden />
+          <div className="text-[13px] text-white/70">Latest net pay</div>
+          <div className="num mt-1 font-display text-[30px] font-medium tracking-[-0.03em]">{latest ? money(Number(latest.net_pay)) : "—"}</div>
+          <div className="text-[12px] text-white/60">{latest ? monthLabel(latest.month) : "No payslip released yet"}</div>
+        </div>
+        <div className="card p-5">
+          <div className="text-[13px] text-ink-3">Earned in {year}</div>
+          <div className="num mt-1 font-display text-[26px] font-medium tracking-[-0.02em]">{money(yearNet)}</div>
+          <div className="text-[12px] text-ink-3">Gross {money(yearGross)}</div>
+        </div>
+        <div className="card p-5">
+          <div className="text-[13px] text-ink-3">Payslips in {year}</div>
+          <div className="num mt-1 font-display text-[26px] font-medium tracking-[-0.02em]">{yearSlips.length}<span className="text-[16px] text-ink-4"> / 12</span></div>
+          <div className="text-[12px] text-ink-3">Released when HR finalizes payroll</div>
+        </div>
       </div>
-      <Modal open={!!open} onClose={() => setOpen(null)} wide title={open ? `Payslip · ${monthLabel(open.month)}` : ""}
-        footer={<><Button variant="secondary" onClick={() => setOpen(null)}>Close</Button><Button icon={<Printer className="size-4" />} onClick={() => window.open(`/me/slips/${open!.run_id}`, "_blank")}>Print / Save PDF</Button></>}>
-        {open && firm && settings && <div className="overflow-x-auto"><div className="min-w-[640px]"><Payslip firm={firm} opts={settings} month={open.month} slip={open.snapshot} /></div></div>}
-      </Modal>
-    </>
+
+      <section className="card p-4 sm:p-5">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-[16px] font-medium">Month-wise payslips</h2>
+          <div className="flex items-center rounded-lg ring-1 ring-line">
+            <IconButton label="Previous year" disabled={year <= firstYear} onClick={() => setYear(year - 1)}><ChevronLeft className="size-4" /></IconButton>
+            <span className="num w-14 text-center font-medium">{year}</span>
+            <IconButton label="Next year" disabled={year >= lastYear} onClick={() => setYear(year + 1)}><ChevronRight className="size-4" /></IconButton>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+          {months.map((m) => {
+            const s = byMonth.get(m);
+            const name = parseYmd(m).toLocaleDateString("en-IN", { month: "short" });
+            if (s) {
+              const active = selected === m;
+              return (
+                <button key={m} onClick={() => setSelected(m)} aria-pressed={active} aria-label={`${monthLabel(m)} payslip, net ${money(Number(s.net_pay))}`}
+                  className={cx("flex flex-col rounded-xl p-3 text-left transition-all cursor-pointer",
+                    active ? "bg-wine-700 text-white shadow-card" : "bg-white ring-1 ring-line hover:-translate-y-0.5 hover:ring-wine-300")}>
+                  <span className="flex items-center justify-between">
+                    <span className={cx("text-[13px] font-medium", active ? "text-white" : "text-ink")}>{name}</span>
+                    <FileText className={cx("size-3.5", active ? "text-white/70" : "text-wine-600")} aria-hidden />
+                  </span>
+                  <span className={cx("num mt-2 font-display text-[16px] font-medium leading-tight", active ? "text-white" : "text-ink")}>{money(Number(s.net_pay))}</span>
+                  <span className={cx("mt-2 h-1.5 overflow-hidden rounded-full", active ? "bg-white/20" : "bg-wine-50")}>
+                    <span className={cx("block h-full rounded-full", active ? "bg-white" : "bg-wine-500")} style={{ width: `${(Number(s.net_pay) / maxNet) * 100}%` }} />
+                  </span>
+                </button>
+              );
+            }
+            const muted = m > thisMonth || (!!joinMonth && m < joinMonth);
+            const note = joinMonth && m < joinMonth ? "Before joining" : m > thisMonth ? "Upcoming" : m === thisMonth ? "In progress" : "Not released";
+            return (
+              <div key={m} className={cx("flex flex-col rounded-xl p-3", muted ? "bg-canvas/70" : "border border-dashed border-line")}>
+                <span className={cx("text-[13px] font-medium", muted ? "text-ink-4" : "text-ink-3")}>{name}</span>
+                <span className="mt-2 text-[12px] text-ink-4">{note}</span>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {open ? (
+        <section className="card overflow-hidden">
+          <div className="flex flex-col gap-3 border-b border-line p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+            <div>
+              <h2 className="text-[18px] font-medium">{monthLabel(open.month)}</h2>
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                <Badge tone="ok">Net {money(Number(open.net_pay))}</Badge>
+                <Badge>Gross {money(Number(open.gross))}</Badge>
+                <Badge tone="bad">Deductions {money(Number(open.total_deductions))}</Badge>
+                <Badge tone="iris">{open.snapshot.attendance.paid_days}/{open.snapshot.attendance.basis_days} paid days</Badge>
+              </div>
+            </div>
+            <Button icon={<Printer className="size-4" />} onClick={() => pdf(open)}>Download PDF</Button>
+          </div>
+          <div className="overflow-x-auto bg-canvas p-3 sm:p-6">
+            <div className="mx-auto min-w-[640px] max-w-[800px]">{firm && settings && <Payslip firm={firm} opts={settings} month={open.month} slip={open.snapshot} />}</div>
+          </div>
+        </section>
+      ) : (
+        <div className="card">
+          <Empty icon={<FileText className="size-6" />} title={slips.length ? "Pick a month" : "No payslips yet"}
+            body={slips.length ? "Tap a released month above to see its payslip." : "Your payslip appears here as soon as HR finalizes the payroll for a month."} />
+        </div>
+      )}
+    </div>
   );
 }
