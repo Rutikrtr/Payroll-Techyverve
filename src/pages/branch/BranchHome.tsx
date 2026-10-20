@@ -23,7 +23,7 @@ const t12 = (t: string | null) => {
 };
 
 function rowState(r: Overview["rows"][number]): { label: string; tone: Tone } {
-  if (r.check_out) return { label: "Checked out", tone: "neutral" };
+  if (r.check_out) return { label: r.status === "half_day" ? "Checked out · Half day" : "Checked out", tone: r.status === "half_day" ? "warn" : "neutral" };
   if (r.check_in) return { label: "Checked in", tone: "ok" };
   if (r.status) return { label: STATUS[r.status].label, tone: STATUS[r.status].tone };
   return { label: "Not checked in", tone: "warn" };
@@ -36,14 +36,31 @@ export default function BranchHome() {
   const [filter, setFilter] = useState<Filter>("all");
   const [full, setFull] = useState(false);
 
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  const [stale, setStale] = useState(false);
+
   const load = useCallback(async () => {
     const { data, error } = await supabase.rpc("branch_overview", { p_date: date });
-    if (error) return setError(error.message);
-    setError(""); setData(data as Overview);
+    if (error) { setStale(true); return setError(error.message); } // keep showing the last good data
+    setError(""); setStale(false); setData(data as Overview); setUpdatedAt(new Date());
   }, [date]);
 
-  // Live: refresh every 30s so check-ins appear and the QR rolls over at midnight.
-  useEffect(() => { load(); const i = setInterval(load, 30_000); return () => clearInterval(i); }, [load]);
+  // Live: poll every 15s, and refresh the moment the screen wakes or the tab comes back,
+  // since browsers pause timers on hidden tabs and sleeping kiosk tablets.
+  useEffect(() => {
+    load();
+    const i = setInterval(load, 15_000);
+    const wake = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", wake);
+    window.addEventListener("focus", wake);
+    window.addEventListener("online", wake);
+    return () => {
+      clearInterval(i);
+      document.removeEventListener("visibilitychange", wake);
+      window.removeEventListener("focus", wake);
+      window.removeEventListener("online", wake);
+    };
+  }, [load]);
 
   const isToday = !!data && data.date === data.today;
   const counts = useMemo(() => {
@@ -60,7 +77,7 @@ export default function BranchHome() {
     setDate(next >= data.today ? null : next);
   }
 
-  if (error) return <PortalLayout subtitle="Branch"><div className="card p-8 text-center text-bad">{error}</div></PortalLayout>;
+  if (error && !data) return <PortalLayout subtitle="Branch"><div className="card p-8 text-center text-bad">{error}</div></PortalLayout>;
   if (!data) return <PortalLayout subtitle="Branch"><div className="grid gap-4 lg:grid-cols-[380px_1fr]"><Skeleton className="h-[480px]" /><Skeleton className="h-[480px]" /></div></PortalLayout>;
 
   const f = data.firm;
@@ -106,7 +123,13 @@ export default function BranchHome() {
               <div className="min-w-0 px-1"><div className="font-medium">{isToday ? "Today" : dateLabel}</div>{isToday && <div className="text-[12px] text-ink-3">{dateLabel}</div>}</div>
               <IconButton label="Next day" disabled={isToday} onClick={() => shift(1)}><ChevronRight className="size-4" /></IconButton>
             </div>
-            <Button size="sm" variant="ghost" icon={<RefreshCw className="size-4" />} onClick={load}>Refresh</Button>
+            <div className="flex items-center gap-2">
+              <span className={cx("inline-flex items-center gap-1.5 text-[12px]", stale ? "text-bad" : "text-ink-3")} aria-live="polite">
+                <span className={cx("size-1.5 rounded-full", stale ? "bg-bad" : "bg-ok animate-pulse")} aria-hidden />
+                {stale ? "Offline, retrying…" : updatedAt ? `Live · updated ${updatedAt.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", second: "2-digit" })}` : "Live"}
+              </span>
+              <Button size="sm" variant="ghost" icon={<RefreshCw className="size-4" />} onClick={load}>Refresh</Button>
+            </div>
           </div>
           <div className="px-4 pt-2">
             <Tabs value={filter} onChange={setFilter} items={[
