@@ -1,3 +1,7 @@
 name = "payroll-techyverve"
-pages_build_output_dir = "dist"
 compatibility_date = "2026-10-01"
+
+# Static site served by Workers; unknown paths fall back to index.html for React Router.
+[assets]
+directory = "./dist"
+not_found_handling = "single-page-application"
