@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Building2, ChevronLeft, ChevronRight, Clock, Mail, MapPin, Maximize2, Phone, RefreshCw, X } from "lucide-react";
+import { Building2, ChevronLeft, ChevronRight, Clock, LogOut, Mail, MapPin, Maximize2, Monitor, Phone, RefreshCw, X } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import PortalLayout from "../../components/PortalLayout";
 import QrCode, { scanUrl } from "../../components/QrCode";
@@ -7,6 +7,8 @@ import { Badge, Button, cx, IconButton, Skeleton, Tabs, type Tone } from "../../
 import { initials, parseYmd, ymd } from "../../lib/format";
 import { STATUS } from "../../lib/hooks";
 import type { AttStatus } from "../../lib/types";
+import { isMobileDevice } from "../../lib/device";
+import { useAuth } from "../../lib/auth";
 
 interface Overview {
   firm: { name: string; legal_name: string | null; address: string | null; city: string | null; state: string | null; pincode: string | null; phone: string | null; email: string | null };
@@ -29,7 +31,27 @@ function rowState(r: Overview["rows"][number]): { label: string; tone: Tone } {
   return { label: "Not checked in", tone: "warn" };
 }
 
+/** Branch kiosk is computer-only: phones and tablets get a notice instead of the QR and register. */
 export default function BranchHome() {
+  const [mobile] = useState(isMobileDevice);
+  return mobile ? <DesktopOnly /> : <BranchDashboard />;
+}
+
+function DesktopOnly() {
+  const { signOut } = useAuth();
+  return (
+    <div className="flex min-h-screen items-center justify-center p-6">
+      <div className="card max-w-sm p-8 text-center">
+        <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-wine-50 text-wine-700"><Monitor className="size-7" /></div>
+        <h1 className="text-[20px] font-medium">Open on a computer</h1>
+        <p className="mt-2 text-ink-3">The branch dashboard and attendance QR work only on a desktop or laptop. Sign in to this branch account from the branch computer.</p>
+        <Button className="mt-6 w-full" variant="secondary" icon={<LogOut className="size-4" />} onClick={signOut}>Sign out</Button>
+      </div>
+    </div>
+  );
+}
+
+function BranchDashboard() {
   const [data, setData] = useState<Overview | null>(null);
   const [error, setError] = useState("");
   const [date, setDate] = useState<string | null>(null);
