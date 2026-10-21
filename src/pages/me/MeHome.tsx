@@ -7,13 +7,14 @@ import PortalLayout from "../../components/PortalLayout";
 import InstallApp from "../../components/InstallApp";
 import { isStandalone } from "../../lib/install";
 import Payslip from "../../components/Payslip";
+import Holidays, { UpcomingHolidays } from "./Holidays";
 import { Badge, Button, cx, Empty, IconButton, Skeleton, Tabs } from "../../components/ui";
 import { STATUS, useSettings } from "../../lib/hooks";
 import { dayKind } from "../../lib/payroll";
 import { daysInMonth, firstOfMonth, money, monthLabel, parseYmd, today, ymd } from "../../lib/format";
 import type { Attendance, Employee, Holiday, Payslip as Slip } from "../../lib/types";
 
-type Tab = "today" | "attendance" | "payslips";
+type Tab = "today" | "attendance" | "holidays" | "payslips";
 
 const t12 = (t: string | null) => {
   if (!t) return "—";
@@ -25,7 +26,7 @@ export default function MeHome() {
   const { profile } = useAuth();
   // Tab lives in the URL so the bottom tab bar (phones) and the top tabs (desktop) stay in sync.
   const [params, setParams] = useSearchParams();
-  const tab: Tab = (["today", "attendance", "payslips"] as const).find((t) => t === params.get("tab")) ?? "today";
+  const tab: Tab = (["today", "attendance", "holidays", "payslips"] as const).find((t) => t === params.get("tab")) ?? "today";
   const setTab = (t: Tab) => setParams({ tab: t }, { replace: true });
   const [me, setMe] = useState<(Employee & { branches: { name: string } | null }) | null>(null);
 
@@ -40,11 +41,12 @@ export default function MeHome() {
           <h1 className="text-[24px] font-medium tracking-[-0.02em]">Hi, {me.full_name.split(" ")[0]}</h1>
           <p className="text-ink-3">{me.emp_code}{me.designation ? ` · ${me.designation}` : ""} · {me.branches?.name} branch</p>
         </div>
-        {tab !== "today" && <h1 className="mb-4 text-[24px] font-medium tracking-[-0.02em] sm:hidden">{tab === "attendance" ? "My attendance" : "Payslips"}</h1>}
-        <div className="hidden sm:block"><Tabs value={tab} onChange={setTab} items={[{ value: "today", label: "Today" }, { value: "attendance", label: "My attendance" }, { value: "payslips", label: "Payslips" }]} /></div>
+        {tab !== "today" && <h1 className="mb-4 text-[24px] font-medium tracking-[-0.02em] sm:hidden">{tab === "attendance" ? "My attendance" : tab === "holidays" ? "Holidays" : "Payslips"}</h1>}
+        <div className="hidden sm:block"><Tabs value={tab} onChange={setTab} items={[{ value: "today", label: "Today" }, { value: "attendance", label: "My attendance" }, { value: "holidays", label: "Holidays" }, { value: "payslips", label: "Payslips" }]} /></div>
         <div className="sm:mt-5">
-          {tab === "today" && <><Today me={me} />{!isStandalone() && <div className="mt-4"><InstallApp /></div>}</>}
+          {tab === "today" && <><Today me={me} /><div className="mt-4"><UpcomingHolidays /></div>{!isStandalone() && <div className="mt-4"><InstallApp /></div>}</>}
           {tab === "attendance" && <MyAttendance me={me} />}
+          {tab === "holidays" && <Holidays />}
           {tab === "payslips" && <MyPayslips me={me} />}
         </div>
       </>)}
