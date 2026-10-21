@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CheckCircle2, Chrome, Compass, Copy, Download, EllipsisVertical, Menu, MessageCircle, Share, SquarePlus } from "lucide-react";
+import { CheckCircle2, Chrome, Compass, Copy, Download, EllipsisVertical, Menu, MessageCircle, Share, Smartphone, SquarePlus } from "lucide-react";
 import { appLink, openInChromeUrl, useInstall, type Browser } from "../lib/install";
 import { Button, useToast } from "./ui";
 
@@ -103,6 +103,7 @@ export default function InstallApp({ share }: { share?: boolean }) {
         {installed ? <span className="inline-flex h-10 items-center gap-2 rounded-lg bg-emerald-50 px-3 text-[14px] font-medium text-emerald-800"><CheckCircle2 className="size-4" />Installed</span>
           : canPrompt ? <Button icon={<Download className="size-4" />} onClick={async () => { if (await install()) toast("ok", "App installed"); }}>Install on this {platform === "desktop" ? "computer" : "phone"}</Button>
           : <a href="/get-app" target="_blank" rel="noreferrer"><Button icon={<Download className="size-4" />}>Install on this device</Button></a>}
+        <a href="/downloads/techyverve.apk" download="Techyverve.apk"><Button variant="secondary" icon={<Smartphone className="size-4" />}>Android APK</Button></a>
         {share && <>
           <Button variant="secondary" icon={<Copy className="size-4" />} onClick={() => { navigator.clipboard.writeText(link); toast("ok", "App link copied"); }}>Copy employee app link</Button>
           <a href={`https://wa.me/?text=${encodeURIComponent(msg)}`} target="_blank" rel="noreferrer"><Button variant="secondary" icon={<MessageCircle className="size-4" />}>WhatsApp</Button></a>

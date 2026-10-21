@@ -56,3 +56,19 @@ Cloudflare → Workers & Pages → Create → Import a repository, select this r
 `wrangler.toml` serves `dist/` with single-page-app fallback. CLI alternative: `npx wrangler login && npm run deploy`.
 
 Add the deployed URL to Supabase → Authentication → URL Configuration (Site URL / redirect URLs).
+
+## Android app (APK)
+
+`public/downloads/techyverve.apk` is a Trusted Web Activity: a real Android app that opens this site full-screen
+(no address bar, verified by `public/.well-known/assetlinks.json`). Because it loads the live site, normal deploys
+update it automatically; rebuild the APK only to change the icon, name or package settings.
+
+Rebuild (Windows): JDK 17 + Android SDK live in `%USERPROFILE%\.techyverve-android`; then
+
+```bash
+cd %USERPROFILE%\.techyverve-android\bw && node build.cjs
+```
+
+and bump `appVersionCode` in `android/build.cjs` first. The signing key is **not** in this repo
+(`../android-signing/`). Keep a backup: Android refuses updates signed with a different key, and the
+`assetlinks.json` fingerprint must match it.

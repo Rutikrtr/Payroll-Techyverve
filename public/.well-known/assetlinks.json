@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.techyverve.payroll",
+      "sha256_cert_fingerprints": ["F9:69:5E:99:26:75:37:BD:1F:A0:81:FE:B9:D3:A2:1C:BE:87:7A:D4:C6:62:66:26:6E:C0:8B:BB:BE:78:EA:5A"]
+    }
+  }
+]
