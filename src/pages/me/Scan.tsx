@@ -71,7 +71,7 @@ export default function Scan() {
   return (
     <PortalLayout subtitle="Scan attendance">
       <div className="mx-auto max-w-md">
-        <Link to="/me" className="mb-4 inline-flex items-center gap-1.5 text-[13px] text-ink-3 hover:text-ink"><ArrowLeft className="size-4" />Back</Link>
+        <Link to="/me" className="mb-4 hidden items-center sm:inline-flex gap-1.5 text-[13px] text-ink-3 hover:text-ink"><ArrowLeft className="size-4" />Back</Link>
         {state === "camera" && <Camera_ onCode={(c) => { const p = parseQr(c); if (p) submit(p.b, p.t); else { setError("That isn't an attendance QR code."); setState("error"); } }} />}
         {state === "locating" && <div className="card flex flex-col items-center p-10 text-center text-ink-3"><MapPin className="mb-3 size-8 animate-pulse text-wine-600" />Getting your location…<span className="mt-1 text-[12px]">Allow location access if your phone asks.</span></div>}
         {state === "busy" && <div className="card flex flex-col items-center p-10 text-ink-3"><Loader2 className="mb-3 size-8 animate-spin" />Recording your attendance…</div>}

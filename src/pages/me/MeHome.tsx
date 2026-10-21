@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { CalendarCheck, ChevronLeft, ChevronRight, FileText, LogIn, LogOut, Printer, ScanLine } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
@@ -23,7 +23,10 @@ const t12 = (t: string | null) => {
 
 export default function MeHome() {
   const { profile } = useAuth();
-  const [tab, setTab] = useState<Tab>("today");
+  // Tab lives in the URL so the bottom tab bar (phones) and the top tabs (desktop) stay in sync.
+  const [params, setParams] = useSearchParams();
+  const tab: Tab = (["today", "attendance", "payslips"] as const).find((t) => t === params.get("tab")) ?? "today";
+  const setTab = (t: Tab) => setParams({ tab: t }, { replace: true });
   const [me, setMe] = useState<(Employee & { branches: { name: string } | null }) | null>(null);
 
   useEffect(() => {
@@ -33,12 +36,13 @@ export default function MeHome() {
   return (
     <PortalLayout subtitle={me ? `${me.full_name} · ${me.branches?.name ?? ""} branch` : "Employee"}>
       {!me ? <Skeleton className="h-64" /> : (<>
-        <div className="mb-5">
+        <div className={tab === "today" ? "mb-5" : "mb-5 sm:block hidden"}>
           <h1 className="text-[24px] font-medium tracking-[-0.02em]">Hi, {me.full_name.split(" ")[0]}</h1>
           <p className="text-ink-3">{me.emp_code}{me.designation ? ` · ${me.designation}` : ""} · {me.branches?.name} branch</p>
         </div>
-        <Tabs value={tab} onChange={setTab} items={[{ value: "today", label: "Today" }, { value: "attendance", label: "My attendance" }, { value: "payslips", label: "Payslips" }]} />
-        <div className="mt-5">
+        {tab !== "today" && <h1 className="mb-4 text-[24px] font-medium tracking-[-0.02em] sm:hidden">{tab === "attendance" ? "My attendance" : "Payslips"}</h1>}
+        <div className="hidden sm:block"><Tabs value={tab} onChange={setTab} items={[{ value: "today", label: "Today" }, { value: "attendance", label: "My attendance" }, { value: "payslips", label: "Payslips" }]} /></div>
+        <div className="sm:mt-5">
           {tab === "today" && <><Today me={me} />{!isStandalone() && <div className="mt-4"><InstallApp /></div>}</>}
           {tab === "attendance" && <MyAttendance me={me} />}
           {tab === "payslips" && <MyPayslips me={me} />}
