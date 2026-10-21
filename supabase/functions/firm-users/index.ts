@@ -1,6 +1,8 @@
-// Firm admin (HR) only: manage branch kiosk logins and employee self-service logins.
+// Firm admin (HR) only: manage branch kiosk logins and employee device logins.
 // Logins use a login ID like "techyverve-pune" / "techyverve-emp002"; the auth email is
 // derived from it (<login_id>@payroll.local) and never receives mail.
+// Employees have no usable password: they sign in once per phone with a one-time code
+// (see the code-login function), and only the admin can end that device session.
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
 const cors = {
@@ -14,6 +16,14 @@ const json = (body: unknown, status = 200) =>
 const LOGIN_DOMAIN = "payroll.local";
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 20);
 const checkPassword = (p: unknown) => typeof p === "string" && p.length >= 8;
+const CODE_TTL_MIN = 15;
+
+async function sha256(text: string) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+const randomCode = () => String(crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000).padStart(6, "0");
+const randomSecret = () => Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, "0")).join("");
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -39,6 +49,16 @@ Deno.serve(async (req) => {
   async function profileFor(col: "branch_id" | "employee_id", id: string) {
     const { data } = await admin.from("profiles").select("id").eq(col, id).eq("firm_id", firm!.id).maybeSingle();
     return data;
+  }
+  /** New one-time code for an employee; signs out their current phone. */
+  async function issueCode(employeeId: string, userId: string) {
+    const code = randomCode();
+    const expires = new Date(Date.now() + CODE_TTL_MIN * 60_000).toISOString();
+    const { error } = await admin.from("login_codes")
+      .upsert({ employee_id: employeeId, code_hash: await sha256(`${employeeId}:${code}`), expires_at: expires, attempts: 0 });
+    if (error) throw error;
+    await admin.rpc("revoke_user_sessions", { p_user: userId });
+    return { code, expires_at: expires };
   }
 
   const body = await req.json();
@@ -72,21 +92,41 @@ Deno.serve(async (req) => {
         const { data: e } = await admin.from("employees").select("id, emp_code, status, branch_id").eq("id", body.employee_id).eq("firm_id", firm.id).maybeSingle();
         if (!e) return json({ error: "Employee not found" }, 404);
         if (!e.branch_id) return json({ error: "Assign the employee to a branch first" }, 400);
-        if (!checkPassword(body.password)) return json({ error: "Password must be at least 8 characters" }, 400);
+        if (e.status !== "active") return json({ error: "Activate the employee first" }, 400);
         const loginId = `${firm.code}-${slug(e.emp_code)}`;
-        await createLogin(loginId, body.password, { role: "employee", employee_id: e.id });
-        return json({ login_id: loginId });
+        await createLogin(loginId, randomSecret(), { role: "employee", employee_id: e.id });
+        const p = await profileFor("employee_id", e.id);
+        return json({ login_id: loginId, ...(await issueCode(e.id, p!.id)) });
+      }
+
+      case "generate_code": {
+        const { data: e } = await admin.from("employees").select("id, status").eq("id", body.employee_id).eq("firm_id", firm.id).maybeSingle();
+        if (!e) return json({ error: "Employee not found" }, 404);
+        if (e.status !== "active") return json({ error: "Activate the employee first" }, 400);
+        const p = await profileFor("employee_id", e.id);
+        if (!p) return json({ error: "Create the employee's login first" }, 400);
+        return json(await issueCode(e.id, p.id));
+      }
+
+      case "logout_device": {
+        const p = await profileFor("employee_id", body.employee_id);
+        if (!p) return json({ error: "Login not found" }, 404);
+        await admin.rpc("revoke_user_sessions", { p_user: p.id });
+        await admin.from("login_codes").delete().eq("employee_id", body.employee_id);
+        return json({ ok: true });
       }
 
       case "revoke_employee_login": {
         const p = await profileFor("employee_id", body.employee_id);
         if (p) await admin.auth.admin.deleteUser(p.id);
+        await admin.from("login_codes").delete().eq("employee_id", body.employee_id);
         return json({ ok: true });
       }
 
       case "reset_password": {
         if (!checkPassword(body.password)) return json({ error: "Password must be at least 8 characters" }, 400);
-        const p = body.branch_id ? await profileFor("branch_id", body.branch_id) : await profileFor("employee_id", body.employee_id);
+        if (!body.branch_id) return json({ error: "Employees sign in with a one-time code, not a password" }, 400);
+        const p = await profileFor("branch_id", body.branch_id);
         if (!p) return json({ error: "Login not found" }, 404);
         const { error } = await admin.auth.admin.updateUserById(p.id, { password: body.password });
         if (error) throw error;

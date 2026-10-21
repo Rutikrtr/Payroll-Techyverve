@@ -22,6 +22,13 @@ export const adminFirm = <T = unknown>(body: Record<string, unknown>) => invoke<
 /** Firm admin: branch and employee logins. */
 export const firmUsers = <T = unknown>(body: Record<string, unknown>) => invoke<T>("firm-users", body);
 
+/** Employee device sign-in: exchange login ID + one-time code for a session kept on this phone. */
+export async function codeLogin(loginId: string, code: string) {
+  const r = await invoke<{ access_token: string; refresh_token: string }>("code-login", { login_id: loginId, code });
+  const { error } = await supabase.auth.setSession(r);
+  if (error) throw new Error(error.message);
+}
+
 /** Branch and employee logins sign in with a login ID; the auth email is derived from it. */
 export const LOGIN_DOMAIN = "payroll.local";
 export const loginEmail = (id: string) => (id.includes("@") ? id.trim() : `${id.trim().toLowerCase()}@${LOGIN_DOMAIN}`);

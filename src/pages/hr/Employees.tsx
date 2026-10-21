@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { KeyRound, Pencil, Plus, Search, UserX, Users } from "lucide-react";
-import { firmUsers, supabase } from "../../lib/supabase";
+import { Link } from "react-router-dom";
+import { Pencil, Plus, Search, Users } from "lucide-react";
+import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import type { Branch, Employee } from "../../lib/types";
 import { Badge, Button, Empty, Field, IconButton, Modal, PageHeader, Skeleton, Switch, useToast } from "../../components/ui";
@@ -31,8 +32,6 @@ export default function Employees() {
   const [branches, setBranches] = useState<Pick<Branch, "id" | "name">[]>([]);
   const [logins, setLogins] = useState<Map<string, string>>(new Map());
   const [branchFilter, setBranchFilter] = useState("all");
-  const [loginPw, setLoginPw] = useState("");
-  const [loginBusy, setLoginBusy] = useState(false);
 
   const loadAccess = useCallback(async () => {
     if (!multi) return;
@@ -46,16 +45,6 @@ export default function Employees() {
   useEffect(() => { loadAccess(); }, [loadAccess]);
   const branchName = (id: string | null) => branches.find((b) => b.id === id)?.name ?? "—";
 
-  async function loginAction(action: "create_employee_login" | "reset_password" | "revoke_employee_login") {
-    setLoginBusy(true);
-    try {
-      const r = await firmUsers<{ login_id?: string }>({ action, employee_id: draft!.id, password: loginPw });
-      toast("ok", action === "create_employee_login" ? `Login created: ${r.login_id}` : action === "reset_password" ? "Password updated" : "Login removed");
-      setLoginPw(""); loadAccess();
-    } catch (err) { toast("error", (err as Error).message); }
-    setLoginBusy(false);
-  }
-
   const list = useMemo(() => (employees ?? [])
     .filter((e) => filter === "all" || e.status === filter)
     .filter((e) => branchFilter === "all" || e.branch_id === branchFilter)
@@ -65,8 +54,9 @@ export default function Employees() {
   const payrollCost = (employees ?? []).filter((e) => e.status === "active").reduce((t, e) => t + monthlyGross(e), 0);
 
   function openNew() {
-    const nextNo = (employees?.length ?? 0) + 1;
-    setLoginPw(""); setDraft({ ...blank, emp_code: `EMP${String(nextNo).padStart(3, "0")}` });
+    // Employee IDs are permanent and never reused, so continue after the highest one ever issued.
+    const nextNo = Math.max(0, ...(employees ?? []).map((e) => Number(e.emp_code.replace(/[^0-9]/g, "")) || 0)) + 1;
+    setDraft({ ...blank, emp_code: `EMP${String(nextNo).padStart(3, "0")}` });
   }
 
   const set = (k: keyof Employee) => ({
@@ -92,6 +82,7 @@ export default function Employees() {
   }
 
   const gross = draft ? monthlyGross(draft as Employee) : 0;
+  const lockedBranch = !!draft?.id && !!(employees ?? []).find((e) => e.id === draft.id)?.branch_id;
 
   return (
     <>
@@ -126,7 +117,7 @@ export default function Employees() {
                       <td className="td">
                         <div className="flex items-center gap-3">
                           <div className="flex size-9 items-center justify-center rounded-full bg-wine-50 text-[12px] font-semibold text-wine-700">{initials(e.full_name)}</div>
-                          <div><div className="font-medium">{e.full_name}</div><div className="text-[12px] text-ink-3">{e.emp_code} · {e.designation || "—"}</div></div>
+                          <div><Link to={`/app/employees/${e.id}`} className="font-medium hover:text-wine-700 hover:underline">{e.full_name}</Link><div className="text-[12px] text-ink-3">{e.emp_code} · {e.designation || "—"}</div></div>
                         </div>
                       </td>
                       <td className="td text-ink-2">{multi ? branchName(e.branch_id) : e.department || "—"}</td>
@@ -135,7 +126,7 @@ export default function Employees() {
                       <td className="td num text-right font-medium">{money(monthlyGross(e))}</td>
                       <td className="td"><div className="flex gap-1">{e.pf_applicable && <Badge>PF</Badge>}{e.esi_applicable && <Badge>ESI</Badge>}</div></td>
                       <td className="td"><Badge dot tone={e.status === "active" ? "ok" : "neutral"}>{e.status === "active" ? "Active" : "Inactive"}</Badge></td>
-                      <td className="td"><IconButton label={`Edit ${e.full_name}`} onClick={() => { setLoginPw(""); setDraft(e); }}><Pencil className="size-4" /></IconButton></td>
+                      <td className="td"><IconButton label={`Edit ${e.full_name}`} onClick={() => setDraft(e)}><Pencil className="size-4" /></IconButton></td>
                     </tr>
                   ))}
                 </tbody>
@@ -150,7 +141,7 @@ export default function Employees() {
           <form id="emp" onSubmit={save} className="space-y-7">
             <Group title="Basic details">
               <Field label="Full name *"><input className="input" required {...set("full_name")} /></Field>
-              <Field label="Employee code *"><input className="input uppercase" required {...set("emp_code")} /></Field>
+              <Field label="Employee ID *" hint={draft.id ? "Permanent. It can never be changed." : "Permanent once saved."}><input className="input uppercase" required disabled={!!draft.id} {...set("emp_code")} /></Field>
               <Field label="Email"><input className="input" type="email" {...set("email")} /></Field>
               <Field label="Phone"><input className="input" type="tel" {...set("phone")} /></Field>
             </Group>
@@ -162,8 +153,8 @@ export default function Employees() {
               <Field label="Date of joining"><input className="input" type="date" {...set("date_of_joining")} /></Field>
               <Field label="Date of exit" hint="Leave empty if still employed"><input className="input" type="date" {...set("date_of_exit")} /></Field>
               {multi && (
-                <Field label="Branch *" hint={branches.length ? "Employee checks in with this branch's QR" : "Create a branch first under Branches"}>
-                  <select className="input" required value={draft.branch_id ?? ""} onChange={(e) => setDraft({ ...draft, branch_id: e.target.value || null })}>
+                <Field label="Branch *" hint={lockedBranch ? "To change branch, use Transfer on the employee's page" : branches.length ? "Employee checks in with this branch's QR" : "Create a branch first under Branches"}>
+                  <select className="input" required disabled={lockedBranch} value={draft.branch_id ?? ""} onChange={(e) => setDraft({ ...draft, branch_id: e.target.value || null })}>
                     <option value="">Choose branch…</option>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                   </select>
                 </Field>
@@ -193,28 +184,11 @@ export default function Employees() {
               <Switch label="ESI applicable" description="Deduct ESI when gross is under the threshold" checked={!!draft.esi_applicable} onChange={(v) => setDraft({ ...draft, esi_applicable: v })} />
               <Switch label="Active" description="Inactive employees are excluded from attendance and payroll" checked={draft.status === "active"} onChange={(v) => setDraft({ ...draft, status: v ? "active" : "inactive" })} />
             </div>
-            {multi && (
-              <fieldset className="rounded-xl border border-line p-4">
-                <legend className="eyebrow px-1">Employee login</legend>
-                {!draft.id ? <p className="text-[13px] text-ink-3">Save the employee first, then create their login here.</p>
-                  : logins.get(draft.id) ? (
-                    <div className="space-y-3">
-                      <p className="text-[13px] text-ink-2">Login ID <span className="font-mono font-medium text-ink">{logins.get(draft.id)}</span>. The employee scans their branch QR to check in and out, and sees their own attendance and payslips.</p>
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                        <Field label="New password" className="flex-1"><input className="input" minLength={8} value={loginPw} autoComplete="new-password" onChange={(e) => setLoginPw(e.target.value)} placeholder="8+ characters" /></Field>
-                        <Button type="button" variant="secondary" icon={<KeyRound className="size-4" />} loading={loginBusy} disabled={loginPw.length < 8} onClick={() => loginAction("reset_password")}>Reset password</Button>
-                        <Button type="button" variant="danger" icon={<UserX className="size-4" />} loading={loginBusy} onClick={() => loginAction("revoke_employee_login")}>Remove login</Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                      <Field label="Password" className="flex-1" hint={`Login ID will be ${firm?.code}-${(draft.emp_code ?? "").toLowerCase().replace(/[^a-z0-9]/g, "")}`}>
-                        <input className="input" minLength={8} value={loginPw} autoComplete="new-password" onChange={(e) => setLoginPw(e.target.value)} placeholder="8+ characters" />
-                      </Field>
-                      <Button type="button" icon={<KeyRound className="size-4" />} loading={loginBusy} disabled={loginPw.length < 8 || !draft.branch_id} onClick={() => loginAction("create_employee_login")}>Create login</Button>
-                    </div>
-                  )}
-              </fieldset>
+            {multi && draft.id && (
+              <Link to={`/app/employees/${draft.id}`} className="flex items-center justify-between rounded-xl border border-line p-4 text-[14px] hover:border-wine-300">
+                <span><b>App login, transfers & payslips</b><span className="block text-[13px] text-ink-3">{logins.get(draft.id) ? `Login ID ${logins.get(draft.id)}` : "No app login yet"} · open the employee page</span></span>
+                <span className="text-wine-700">Open →</span>
+              </Link>
             )}
           </form>
         )}

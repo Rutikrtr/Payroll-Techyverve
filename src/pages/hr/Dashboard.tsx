@@ -8,6 +8,7 @@ import type { Attendance, Employee, Holiday, PayrollRun } from "../../lib/types"
 import { Badge, Button, Empty, PageHeader, Skeleton } from "../../components/ui";
 import { dateLabel, initials, money, monthLabel, parseYmd, today, ymd } from "../../lib/format";
 import { STATUS } from "../../lib/hooks";
+import InstallApp from "../../components/InstallApp";
 
 const PIE = ["#7b1e3a", "#4b5bfc", "#bf5d79", "#7ea1f3", "#d993a6", "#2a3550", "#a4acc4"];
 
@@ -225,6 +226,7 @@ export default function Dashboard() {
           <p className="mt-3 text-[12px] text-ink-4">Today is {dateLabel(t)}</p>
         </section>
       </div>
+      <div className="mt-4"><InstallApp share={!!firm?.multi_branch} /></div>
     </>
   );
 }

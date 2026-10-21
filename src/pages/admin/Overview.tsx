@@ -7,6 +7,7 @@ import type { Firm } from "../../lib/types";
 import { Badge, Button, Empty, PageHeader, Skeleton } from "../../components/ui";
 import { compact, initials, money } from "../../lib/format";
 import { useAuth } from "../../lib/auth";
+import InstallApp from "../../components/InstallApp";
 
 type Stat = { firm_id: string; employees: number; present_today: number; last_payroll: string | null; last_net: number | null };
 
@@ -102,6 +103,7 @@ export default function Overview() {
           </ul>
         </div>
       </div>
+      <div className="mt-4"><InstallApp share /></div>
     </>
   );
 }

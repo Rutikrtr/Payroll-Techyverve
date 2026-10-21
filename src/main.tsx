@@ -3,12 +3,14 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import "./index.css";
+import "./lib/install"; // listen for the install prompt from the very first load
 import { AuthProvider, HOME, useAuth } from "./lib/auth";
 import type { Role } from "./lib/types";
 import { ToastProvider } from "./components/ui";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import NoAccess from "./pages/NoAccess";
+import GetApp from "./pages/GetApp";
 
 const AdminOverview = lazy(() => import("./pages/admin/Overview"));
 const AdminFirms = lazy(() => import("./pages/admin/Firms"));
@@ -17,6 +19,7 @@ const HrDashboard = lazy(() => import("./pages/hr/Dashboard"));
 const HrAttendance = lazy(() => import("./pages/hr/Attendance"));
 const HrEmployees = lazy(() => import("./pages/hr/Employees"));
 const HrBranches = lazy(() => import("./pages/hr/Branches"));
+const HrEmployeeProfile = lazy(() => import("./pages/hr/EmployeeProfile"));
 const HrPayroll = lazy(() => import("./pages/hr/Payroll"));
 const HrSettings = lazy(() => import("./pages/hr/Settings"));
 const SlipPrint = lazy(() => import("./pages/hr/SlipPrint"));
@@ -46,6 +49,11 @@ function Home() {
   return <Navigate to={HOME[profile.role]} replace />;
 }
 
+// Installable app (PWA). Skipped in dev so Vite hot reload is never served from cache.
+if ("serviceWorker" in navigator && import.meta.env.PROD) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js"));
+}
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter>
@@ -55,6 +63,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/get-app" element={<GetApp />} />
               <Route element={<Gate roles={["superadmin"]}><Layout /></Gate>}>
                 <Route path="/admin" element={<AdminOverview />} />
                 <Route path="/admin/firms" element={<AdminFirms />} />
@@ -64,6 +73,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                 <Route path="/app" element={<HrDashboard />} />
                 <Route path="/app/attendance" element={<HrAttendance />} />
                 <Route path="/app/employees" element={<HrEmployees />} />
+                <Route path="/app/employees/:id" element={<HrEmployeeProfile />} />
                 <Route path="/app/branches" element={<HrBranches />} />
                 <Route path="/app/payroll" element={<HrPayroll />} />
                 <Route path="/app/settings" element={<HrSettings />} />

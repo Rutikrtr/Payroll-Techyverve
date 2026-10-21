@@ -4,6 +4,8 @@ import { CalendarCheck, ChevronLeft, ChevronRight, FileText, LogIn, LogOut, Prin
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import PortalLayout from "../../components/PortalLayout";
+import InstallApp from "../../components/InstallApp";
+import { isStandalone } from "../../lib/install";
 import Payslip from "../../components/Payslip";
 import { Badge, Button, cx, Empty, IconButton, Skeleton, Tabs } from "../../components/ui";
 import { STATUS, useSettings } from "../../lib/hooks";
@@ -37,7 +39,7 @@ export default function MeHome() {
         </div>
         <Tabs value={tab} onChange={setTab} items={[{ value: "today", label: "Today" }, { value: "attendance", label: "My attendance" }, { value: "payslips", label: "Payslips" }]} />
         <div className="mt-5">
-          {tab === "today" && <Today me={me} />}
+          {tab === "today" && <><Today me={me} />{!isStandalone() && <div className="mt-4"><InstallApp /></div>}</>}
           {tab === "attendance" && <MyAttendance me={me} />}
           {tab === "payslips" && <MyPayslips me={me} />}
         </div>

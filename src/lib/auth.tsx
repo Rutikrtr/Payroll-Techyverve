@@ -49,6 +49,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  // An admin can end a device session server-side ("Log out device"). The local JWT stays valid
+  // until it expires, so ask the server on open, on focus and every 2 minutes; if the session is
+  // gone, drop it locally. Offline/network errors are ignored so a bad signal never logs anyone out.
+  const userId = session?.user.id;
+  useEffect(() => {
+    if (!userId) return;
+    const verify = async () => {
+      if (document.visibilityState !== "visible") return;
+      const { error } = await supabase.auth.getUser();
+      if (error && (error.status === 401 || error.status === 403)) await supabase.auth.signOut({ scope: "local" });
+    };
+    verify();
+    const i = setInterval(verify, 120_000);
+    document.addEventListener("visibilitychange", verify);
+    window.addEventListener("focus", verify);
+    return () => { clearInterval(i); document.removeEventListener("visibilitychange", verify); window.removeEventListener("focus", verify); };
+  }, [userId]);
+
   const value: AuthState = {
     session, profile, firm, loading,
     refreshFirm: async () => {

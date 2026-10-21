@@ -1,9 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, CalendarCheck, Eye, EyeOff, FileText, ShieldCheck } from "lucide-react";
-import { loginEmail, supabase } from "../lib/supabase";
+import { codeLogin, loginEmail, supabase } from "../lib/supabase";
 import { HOME, useAuth } from "../lib/auth";
-import { Button, Field } from "../components/ui";
+import { Button, cx, Field } from "../components/ui";
 import { Logo } from "../components/Layout";
 
 export default function Login() {
@@ -19,6 +19,10 @@ export default function Login() {
 
   const [params] = useSearchParams();
   const next = params.get("next");
+  // Installed app / shared employee link opens straight on the employee code sign-in.
+  const standalone = typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches;
+  const [mode, setMode] = useState<"employee" | "admin">(params.get("as") === "employee" || standalone ? "employee" : "admin");
+  const [code, setCode] = useState("");
 
   useEffect(() => { supabase.rpc("setup_required").then(({ data }) => setSetup(!!data)); }, []);
 
@@ -33,6 +37,9 @@ export default function Login() {
       if (error) setError(error.message);
       else if (!data.session) setNotice("Super admin created. Check your inbox to confirm the email, then sign in.");
       setSetup(false);
+    } else if (mode === "employee") {
+      try { await codeLogin(email, code); }
+      catch (err) { setError((err as Error).message); }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email: loginEmail(email), password });
       if (error) setError(error.message === "Invalid login credentials" ? "Login ID / email or password is incorrect." : error.message);
@@ -74,8 +81,20 @@ export default function Login() {
           <div className="lg:hidden mb-10"><Logo /></div>
           <h2 className="text-[28px] font-medium tracking-[-0.02em]">{setup ? "Set up your platform" : "Welcome back"}</h2>
           <p className="mt-1.5 text-ink-3">
-            {setup ? "Create the super admin account. You'll use it to onboard firms." : "Sign in with your admin email, or the branch / employee login ID your admin gave you."}
+            {setup ? "Create the super admin account. You'll use it to onboard firms."
+              : mode === "employee" ? "Enter your login ID and the one-time code from your admin. You stay signed in on this phone."
+              : "Sign in with your admin email, or your branch login ID and password."}
           </p>
+          {!setup && setup !== null && (
+            <div role="tablist" aria-label="Sign in as" className="mt-6 grid grid-cols-2 rounded-xl bg-ink/[.05] p-1">
+              {([["employee", "Employee"], ["admin", "Admin / Branch"]] as const).map(([m, label]) => (
+                <button key={m} type="button" role="tab" aria-selected={mode === m} onClick={() => { setMode(m); setError(""); }}
+                  className={cx("h-9 rounded-lg text-[14px] font-medium transition-colors cursor-pointer", mode === m ? "bg-white text-ink shadow-sm" : "text-ink-3 hover:text-ink")}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
 
           <form onSubmit={submit} className="mt-8 space-y-4" noValidate={false}>
             {setup && (
@@ -83,10 +102,17 @@ export default function Login() {
                 <input className="input" required value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
               </Field>
             )}
-            <Field label={setup ? "Email" : "Email or login ID"} hint={setup ? undefined : "Branch and employee accounts use a login ID like techyverve-emp001."}>
+            <Field label={setup ? "Email" : mode === "employee" ? "Login ID" : "Email or branch login ID"}>
               <input className="input" type={setup ? "email" : "text"} required value={email} onChange={(e) => setEmail(e.target.value)}
-                autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder={setup ? "you@company.com" : "hr@yourfirm.com or techyverve-emp001"} />
+                autoComplete="username" autoCapitalize="none" spellCheck={false}
+                placeholder={setup ? "you@company.com" : mode === "employee" ? "techyverve-emp001" : "hr@yourfirm.com or techyverve-kothrud"} />
             </Field>
+            {!setup && mode === "employee" ? (
+              <Field label="One-time code" hint="6 digits, valid for 15 minutes. Ask your admin for a new one if it expired.">
+                <input className="input num text-center font-display text-[22px] tracking-[0.5em]" required inputMode="numeric" autoComplete="one-time-code"
+                  pattern="[0-9]{6}" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))} placeholder="••••••" />
+              </Field>
+            ) : (
             <Field label="Password" hint={setup ? "At least 8 characters." : undefined}>
               <div className="relative">
                 <input className="input pr-11" type={show ? "text" : "password"} required minLength={setup ? 8 : undefined} value={password}
@@ -97,6 +123,7 @@ export default function Login() {
                 </button>
               </div>
             </Field>
+            )}
             {error && <div role="alert" className="rounded-lg bg-rose-50 px-3 py-2.5 text-[13px] text-rose-700 ring-1 ring-rose-200">{error}</div>}
             {notice && <div role="status" className="rounded-lg bg-emerald-50 px-3 py-2.5 text-[13px] text-emerald-800 ring-1 ring-emerald-200">{notice}</div>}
             <Button type="submit" className="w-full h-11" loading={busy} disabled={setup === null}>

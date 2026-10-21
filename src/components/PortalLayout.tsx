@@ -18,7 +18,8 @@ export default function PortalLayout({ subtitle, children }: { subtitle: string;
           </div>
           <div className="ml-auto flex items-center gap-2">
             <span className="hidden font-mono text-[12px] text-ink-3 sm:inline">{profile?.login_id}</span>
-            <IconButton label="Sign out" onClick={signOut}><LogOut className="size-4" /></IconButton>
+            {/* Employees stay signed in on their phone; only the admin can end that session. */}
+            {profile?.role !== "employee" && <IconButton label="Sign out" onClick={signOut}><LogOut className="size-4" /></IconButton>}
           </div>
         </div>
       </header>
