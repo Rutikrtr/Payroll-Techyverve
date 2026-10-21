@@ -66,7 +66,9 @@ update it automatically; rebuild the APK only to change the icon, name or packag
 Rebuild (Windows): JDK 17 + Android SDK live in `%USERPROFILE%\.techyverve-android`; then
 
 ```bash
+copy android\build.cjs %USERPROFILE%\.techyverve-android\bw\
 cd %USERPROFILE%\.techyverve-android\bw && node build.cjs
+copy %USERPROFILE%\.techyverve-android\techyverve.apk public\downloads\
 ```
 
 and bump `appVersionCode` in `android/build.cjs` first. The signing key is **not** in this repo
