@@ -4,9 +4,11 @@ import { useInstall } from "../lib/install";
 import { InstallSteps } from "../components/InstallApp";
 import { Button } from "../components/ui";
 
-/** Public page employees open from the shared link to install the app. */
+/** Public page employees open from the shared link to install the app on their phone. */
 export default function GetApp() {
-  const { installed, canPrompt, platform, install } = useInstall();
+  const { installed, justInstalled, canPrompt, browser, install } = useInstall();
+  const label = browser.startsWith("ios") ? "iPhone" : browser.startsWith("android") ? "Android" : "computer";
+
   return (
     <div className="min-h-screen bg-[#14060c] text-white">
       <div className="pointer-events-none fixed -right-32 -top-32 size-96 rounded-full bg-wine-700/50 blur-[100px]" aria-hidden />
@@ -25,15 +27,22 @@ export default function GetApp() {
         <div className="mt-auto space-y-3 pt-10">
           {installed ? (
             <Link to="/login?as=employee"><Button className="h-12 w-full !bg-white !text-wine-800" icon={<CheckCircle2 className="size-5" />}>Open app <ArrowRight className="size-4" /></Button></Link>
-          ) : canPrompt ? (
-            <Button className="h-12 w-full !bg-white !text-wine-800" icon={<Download className="size-5" />} onClick={install}>Install app</Button>
+          ) : justInstalled ? (
+            <div className="rounded-2xl bg-white p-5 text-center text-ink">
+              <CheckCircle2 className="mx-auto size-10 text-ok" />
+              <div className="mt-2 text-[17px] font-medium">Installed</div>
+              <p className="mt-1 text-[14px] text-ink-3">Open <b>Techyverve</b> from your home screen and sign in with the code from your admin.</p>
+            </div>
           ) : (
             <div className="rounded-2xl bg-white p-5 text-ink">
-              <div className="mb-3 font-medium">Install in 3 steps</div>
-              <InstallSteps ios={platform === "ios"} />
+              {canPrompt && (
+                <Button className="mb-4 h-12 w-full" icon={<Download className="size-5" />} onClick={install}>Install app</Button>
+              )}
+              <div className="mb-3 text-[15px] font-medium">{canPrompt ? "Or install from the menu" : `Install on your ${label}`}</div>
+              <InstallSteps browser={browser} />
             </div>
           )}
-          {!installed && <Link to="/login?as=employee" className="block text-center text-[13px] text-white/60 underline">Continue in the browser instead</Link>}
+          {!installed && <Link to="/login?as=employee" className="block py-2 text-center text-[13px] text-white/60 underline">Continue in the browser instead</Link>}
         </div>
       </main>
     </div>
