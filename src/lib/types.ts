@@ -42,13 +42,18 @@ export interface Employee {
   pf_applicable: boolean; esi_applicable: boolean; status: "active" | "inactive"; branch_id: string | null;
 }
 
-export interface Branch { id: string; firm_id: string; name: string; address: string | null; created_at: string }
+export interface Branch {
+  id: string; firm_id: string; name: string; address: string | null; created_at: string;
+  lat: number | null; lng: number | null; radius_m: number;
+}
 
 export type AttStatus = "present" | "absent" | "half_day" | "paid_leave" | "unpaid_leave" | "holiday" | "week_off";
 
 export interface Attendance {
   id?: string; firm_id: string; employee_id: string; date: string; status: AttStatus;
   check_in: string | null; check_out: string | null; is_late: boolean; ot_hours: number; note: string | null;
+  in_lat?: number | null; in_lng?: number | null; in_acc?: number | null;
+  out_lat?: number | null; out_lng?: number | null; out_acc?: number | null;
 }
 
 export interface Holiday { id: string; firm_id: string; date: string; name: string }

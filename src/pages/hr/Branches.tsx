@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
-import { Building, KeyRound, MapPin, Plus, Printer, QrCode as QrIcon, Trash2, Users } from "lucide-react";
+import { Building, KeyRound, LocateFixed, MapPin, Plus, Printer, QrCode as QrIcon, Trash2, Users } from "lucide-react";
 import { firmUsers, supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import type { Branch } from "../../lib/types";
 import { Badge, Button, Empty, Field, IconButton, Modal, PageHeader, Skeleton, useToast } from "../../components/ui";
 import QrCode, { scanUrl } from "../../components/QrCode";
 import { today } from "../../lib/format";
+import BranchLocation, { mapsUrl } from "./BranchLocation";
 
 type Row = Branch & { login_id: string | null; staff: number; inToday: number; outToday: number };
 
@@ -19,11 +20,12 @@ export default function Branches() {
   const [pw, setPw] = useState<{ branch: Row; value: string } | null>(null);
   const [del, setDel] = useState<Row | null>(null);
   const [qr, setQr] = useState<{ branch: Row; token: string } | null>(null);
+  const [geo, setGeo] = useState<Row | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function load() {
     const [{ data: b }, { data: p }, { data: e }, { data: a }] = await Promise.all([
-      supabase.from("branches").select("id, firm_id, name, address, created_at").order("created_at"),
+      supabase.from("branches").select("id, firm_id, name, address, created_at, lat, lng, radius_m").order("created_at"),
       supabase.from("profiles").select("branch_id, login_id").eq("role", "branch"),
       supabase.from("employees").select("id, branch_id").eq("status", "active"),
       supabase.from("attendance").select("employee_id, check_in, check_out").eq("date", today()),
@@ -105,8 +107,15 @@ export default function Branches() {
                 <div className="mt-4 rounded-lg border border-dashed border-line px-3 py-2 text-[13px]">
                   <span className="text-ink-3">Kiosk login ID </span><span className="font-mono font-medium">{b.login_id ?? "—"}</span>
                 </div>
+                <div className={`mt-2 flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] ${b.lat != null ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"}`}>
+                  <LocateFixed className="size-4 shrink-0" />
+                  {b.lat != null
+                    ? <span>Geofence on · within {b.radius_m} m · <a className="font-medium underline" href={mapsUrl(b.lat, b.lng!)} target="_blank" rel="noreferrer">map</a></span>
+                    : <span>No location set: scans are recorded but allowed from anywhere</span>}
+                </div>
                 <div className="mt-4 flex gap-2 pt-1">
                   <Button size="sm" className="flex-1" icon={<QrIcon className="size-4" />} onClick={() => showQr(b)}>Today's QR</Button>
+                  <Button size="sm" variant="secondary" icon={<LocateFixed className="size-4" />} onClick={() => setGeo(b)}>Location</Button>
                   <Button size="sm" variant="secondary" icon={<KeyRound className="size-4" />} onClick={() => setPw({ branch: b, value: "" })}>Password</Button>
                 </div>
               </section>
@@ -143,6 +152,8 @@ export default function Branches() {
         footer={<><Button variant="secondary" onClick={() => setDel(null)}>Cancel</Button><Button className="!bg-bad !text-white" loading={busy} onClick={remove}>Delete branch</Button></>}>
         <p className="text-ink-2">Employees still assigned to this branch must be moved to another branch first.</p>
       </Modal>
+
+      <BranchLocation branch={geo} onClose={() => setGeo(null)} onSaved={load} />
 
       <Modal open={!!qr} onClose={() => setQr(null)} title={`${qr?.branch.name} · today's QR`} description="Valid until midnight. Employees scan it to check in, and again to check out."
         footer={<><Button variant="secondary" onClick={() => setQr(null)}>Close</Button><Button icon={<Printer className="size-4" />} onClick={() => window.print()}>Print</Button></>}>

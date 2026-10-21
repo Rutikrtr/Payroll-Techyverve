@@ -12,9 +12,9 @@ import { useAuth } from "../../lib/auth";
 
 interface Overview {
   firm: { name: string; legal_name: string | null; address: string | null; city: string | null; state: string | null; pincode: string | null; phone: string | null; email: string | null };
-  branch: { id: string; name: string; address: string | null };
+  branch: { id: string; name: string; address: string | null; geofenced: boolean; radius_m: number };
   date: string; today: string; token: string | null;
-  rows: { emp_code: string; full_name: string; designation: string | null; status: AttStatus | null; check_in: string | null; check_out: string | null; is_late: boolean }[];
+  rows: { emp_code: string; full_name: string; designation: string | null; status: AttStatus | null; check_in: string | null; check_out: string | null; is_late: boolean; in_dist: number | null; out_dist: number | null }[];
 }
 type Filter = "all" | "in" | "open" | "missing";
 
@@ -23,6 +23,12 @@ const t12 = (t: string | null) => {
   const [h, m] = t.split(":").map(Number);
   return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
 };
+
+/** Distance of a scan from the branch (only when the branch has a geofence). */
+function Dist({ m }: { m: number | null }) {
+  if (m == null) return null;
+  return <span className="ml-1.5 inline-flex items-center gap-0.5 text-[12px] text-ok" title="Distance from branch"><MapPin className="size-3" aria-hidden />{m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${m} m`}</span>;
+}
 
 function rowState(r: Overview["rows"][number]): { label: string; tone: Tone } {
   if (r.check_out) return { label: r.status === "half_day" ? "Checked out · Half day" : "Checked out", tone: r.status === "half_day" ? "warn" : "neutral" };
@@ -167,8 +173,8 @@ function BranchDashboard() {
                   <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-wine-50 text-[12px] font-semibold text-wine-700">{initials(r.full_name)}</div>
                   <div className="min-w-0 flex-1"><div className="truncate font-medium">{r.full_name}</div><div className="truncate text-[12px] text-ink-3">{r.emp_code}{r.designation ? ` · ${r.designation}` : ""}</div></div>
                   <div className="hidden text-right text-[13px] sm:block">
-                    <div className="num"><span className="text-ink-3">In </span>{t12(r.check_in)}{r.is_late && <span className="ml-1 text-warn">· late</span>}</div>
-                    <div className="num"><span className="text-ink-3">Out </span>{t12(r.check_out)}</div>
+                    <div className="num"><span className="text-ink-3">In </span>{t12(r.check_in)}{r.is_late && <span className="ml-1 text-warn">· late</span>}<Dist m={r.in_dist} /></div>
+                    <div className="num"><span className="text-ink-3">Out </span>{t12(r.check_out)}<Dist m={r.out_dist} /></div>
                   </div>
                   <Badge dot tone={st.tone}>{st.label}</Badge>
                 </li>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { CalendarCheck, CheckCheck, ChevronLeft, ChevronRight, Search, Users } from "lucide-react";
+import { CalendarCheck, CheckCheck, ChevronLeft, ChevronRight, MapPin, Search, Users } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import type { Attendance as Att, AttStatus, Holiday } from "../../lib/types";
@@ -159,7 +159,7 @@ function Daily() {
           <table className="w-full min-w-[980px]">
             <thead><tr>
               <th className="th">Employee</th><th className="th">Status</th><th className="th">Check-in</th><th className="th">Check-out</th>
-              {settings.ot_enabled && <th className="th">OT hrs</th>}<th className="th">Note</th><th className="th w-16" />
+              {settings.ot_enabled && <th className="th">OT hrs</th>}{firm?.multi_branch && <th className="th">Scan location</th>}<th className="th">Note</th><th className="th w-16" />
             </tr></thead>
             <tbody>
               {list.map((e) => {
@@ -196,6 +196,12 @@ function Daily() {
                       disabled={!a || !["present", "half_day"].includes(a.status)} onChange={(ev) => save(e.id, { check_out: ev.target.value })} /></td>
                     {settings.ot_enabled && <td className="td"><input type="number" min={0} step={0.5} aria-label="Overtime hours" className="input num h-9 w-20" defaultValue={a?.ot_hours ?? 0}
                       disabled={!a} onBlur={(ev) => Number(ev.target.value) !== Number(a?.ot_hours ?? 0) && save(e.id, { ot_hours: Number(ev.target.value) })} /></td>}
+                    {firm?.multi_branch && (
+                      <td className="td whitespace-nowrap text-[12px]">
+                        {a?.in_lat != null ? <a className="font-medium text-wine-700 hover:underline" href={`https://www.google.com/maps?q=${a.in_lat},${a.in_lng}`} target="_blank" rel="noreferrer"><MapPin className="inline size-3" aria-hidden /> In</a> : <span className="text-ink-4">—</span>}
+                        {a?.out_lat != null && <> · <a className="font-medium text-wine-700 hover:underline" href={`https://www.google.com/maps?q=${a.out_lat},${a.out_lng}`} target="_blank" rel="noreferrer"><MapPin className="inline size-3" aria-hidden /> Out</a></>}
+                      </td>
+                    )}
                     <td className="td"><input aria-label="Note" className="input h-9 min-w-[140px]" placeholder="—" defaultValue={a?.note ?? ""} disabled={!a}
                       onBlur={(ev) => ev.target.value !== (a?.note ?? "") && save(e.id, { note: ev.target.value || null })} /></td>
                     <td className="td text-right">
