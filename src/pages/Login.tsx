@@ -26,8 +26,10 @@ export default function Login() {
 
   useEffect(() => { supabase.rpc("setup_required").then(({ data }) => setSetup(!!data)); }, []);
 
-  // Only follow ?next= to an in-app path (never an absolute URL).
-  if (!loading && session && profile) return <Navigate to={next?.startsWith("/") && !next.startsWith("//") ? next : HOME[profile.role]} replace />;
+  // Only follow ?next= to an in-app path: one leading "/", then no "/" or "\" (browsers treat "/\x" and "//x"
+  // as another site), no backslashes or control characters anywhere.
+  const safeNext = next && /^\/(?![/\\])[^\\\s]*$/.test(next) ? next : null;
+  if (!loading && session && profile) return <Navigate to={safeNext ?? HOME[profile.role]} replace />;
 
   async function submit(e: FormEvent) {
     e.preventDefault();

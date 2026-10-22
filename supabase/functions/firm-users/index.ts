@@ -61,8 +61,8 @@ Deno.serve(async (req) => {
     return { code, expires_at: expires };
   }
 
-  const body = await req.json();
   try {
+    const body = await req.json();
     switch (body.action) {
       case "create_branch": {
         const name = String(body.name ?? "").trim();
@@ -117,8 +117,10 @@ Deno.serve(async (req) => {
       }
 
       case "revoke_employee_login": {
+        // profileFor() is scoped to this firm, so another firm's employee is never touched.
         const p = await profileFor("employee_id", body.employee_id);
-        if (p) await admin.auth.admin.deleteUser(p.id);
+        if (!p) return json({ error: "Login not found" }, 404);
+        await admin.auth.admin.deleteUser(p.id);
         await admin.from("login_codes").delete().eq("employee_id", body.employee_id);
         return json({ ok: true });
       }
