@@ -3,6 +3,7 @@ import { Lightbulb, LightbulbOff, Radio, Search } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { cx, PageHeader, Skeleton } from "../../components/ui";
+import BranchNetwork from "./BranchNetwork";
 import { initials, today } from "../../lib/format";
 
 /**
@@ -104,28 +105,17 @@ export default function LiveOffice() {
           <Radio className={cx("size-3.5", live && "animate-pulse")} />{live ? "Live" : "Connecting…"} · {now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
         </span>} />
 
-      <div className={cx("grid gap-4", multi ? "xl:grid-cols-[220px_minmax(0,1fr)_320px]" : "xl:grid-cols-[minmax(0,1fr)_320px]")}>
-        {multi && (
-          <aside className="flex gap-2 overflow-x-auto pb-1 xl:flex-col xl:overflow-visible" aria-label="Branches">
-            {branches.map((b) => {
-              const bc = counts(staffOf(b.id)); const total = staffOf(b.id).length; const on = bc.in > 0;
-              return (
-                <button key={b.id} type="button" onClick={() => { setBranchId(b.id); setFocus(null); }} aria-pressed={branchId === b.id}
-                  className={cx("card min-w-[180px] cursor-pointer p-3.5 text-left transition-all", branchId === b.id ? "ring-2 ring-wine-600" : "hover:ring-1 hover:ring-ink-4")}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate font-medium">{b.name}</span>
-                    {on ? <Lightbulb className="size-4 shrink-0 text-amber-500" aria-label="Lights on" /> : <LightbulbOff className="size-4 shrink-0 text-ink-4" aria-label="Lights off" />}
-                  </div>
-                  <div className="mt-2 flex items-end justify-between">
-                    <span className="num font-display text-[22px] font-medium leading-none">{bc.in}<span className="text-[13px] text-ink-3">/{total}</span></span>
-                    <span className="text-[11px] text-ink-3">in office</span>
-                  </div>
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-canvas"><div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${total ? (bc.in / total) * 100 : 0}%` }} /></div>
-                </button>
-              );
-            })}
-          </aside>
-        )}
+      {branches.length > 0 && (() => {
+        const node = (b: Branch) => ({ id: b.id, name: b.name, inOffice: counts(staffOf(b.id)).in, total: staffOf(b.id).length });
+        return (
+          <section className="card mb-4 overflow-hidden p-2">
+            <BranchNetwork firmName={firm?.name ?? ""} logo={firm?.logo_url ?? null} main={node(branches[0])} others={multi ? branches.slice(1).map(node) : []}
+              selected={branchId} onSelect={(id) => { setBranchId(id); setFocus(null); document.getElementById("live-floor")?.scrollIntoView({ behavior: "smooth", block: "start" }); }} />
+          </section>
+        );
+      })()}
+
+      <div id="live-floor" className="grid scroll-mt-6 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
 
         <section className="card overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3.5">
