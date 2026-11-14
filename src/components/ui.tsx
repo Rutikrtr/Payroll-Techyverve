@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { AlertCircle, CheckCircle2, Loader2, X } from "lucide-react";
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
@@ -114,7 +115,8 @@ export function Modal({ open, onClose, title, description, children, footer, wid
     return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
   }, [open]);
   if (!open) return null;
-  return (
+  // Rendered at <body> level so no card, transform or filter around the caller can clip or shift it.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6">
       <div className="absolute inset-0 bg-ink/40 backdrop-blur-[2px]" onClick={onClose} aria-hidden />
       <div ref={ref} role="dialog" aria-modal="true" aria-label={title}
@@ -129,7 +131,8 @@ export function Modal({ open, onClose, title, description, children, footer, wid
         <div className="overflow-y-auto px-6 py-5">{children}</div>
         {footer && <div className="flex justify-end gap-2 px-6 py-4 border-t border-line bg-[#fafaf9] sm:rounded-b-2xl">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
