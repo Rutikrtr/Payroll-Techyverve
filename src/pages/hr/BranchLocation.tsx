@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Crosshair, ExternalLink, MapPinOff } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import { getFix } from "../../lib/location";
 import type { Branch } from "../../lib/types";
 import { Button, Field, Modal, useToast } from "../../components/ui";
 
@@ -30,13 +31,14 @@ export default function BranchLocation({ branch, onClose, onSaved }: { branch: B
 
   const parsed = parseCoords(coords);
 
-  function useMine() {
+  async function useMine() {
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (p) => { setCoords(`${p.coords.latitude.toFixed(6)}, ${p.coords.longitude.toFixed(6)}`); setLocating(false);
-        if (p.coords.accuracy > 100) toast("error", `Location is only accurate to ±${Math.round(p.coords.accuracy)} m. For best results do this on a phone at the branch.`); },
-      () => { setLocating(false); toast("error", "Couldn't get location. Allow location access, or paste coordinates from Google Maps."); },
-      { enableHighAccuracy: true, timeout: 20_000, maximumAge: 0 });
+    try {
+      const fix = await getFix();
+      setCoords(`${fix.lat.toFixed(6)}, ${fix.lng.toFixed(6)}`);
+      if (fix.accuracy > 100) toast("error", `Location is only accurate to ±${fix.accuracy} m. For best results do this on a phone at the branch.`);
+    } catch (e) { toast("error", `${(e as Error).message} Or paste coordinates from Google Maps.`); }
+    setLocating(false);
   }
 
   async function save(e: FormEvent) {

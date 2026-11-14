@@ -3,23 +3,11 @@ import { Link, useSearchParams } from "react-router-dom";
 import jsQR from "jsqr";
 import { AlertCircle, ArrowLeft, Camera, CheckCircle2, Loader2, LogIn, LogOut, MapPin, RotateCcw } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import { getFix, locationPermission, locationHelp } from "../../lib/location";
 import PortalLayout from "../../components/PortalLayout";
 import { Button } from "../../components/ui";
 
 type Result = { action: "check_in" | "check_out"; time: string; late?: boolean; hours?: number; half_day?: boolean; branch: string; distance_m: number | null };
-
-/** High-accuracy GPS fix, with messages employees can act on. */
-function getPosition(): Promise<GeolocationPosition> {
-  return new Promise((resolve, reject) => {
-    if (!("geolocation" in navigator)) return reject(new Error("This browser can't share location. Use Chrome or Safari on your phone."));
-    navigator.geolocation.getCurrentPosition(resolve, (e) => reject(new Error(
-      e.code === e.PERMISSION_DENIED
-        ? "Location permission is blocked. Turn on location (GPS) and allow it for this site in your browser settings, then try again."
-        : e.code === e.TIMEOUT ? "Couldn't get your location in time. Move near a window or outdoors and try again."
-        : "Location is unavailable. Turn on your phone's location (GPS) and try again.")),
-      { enableHighAccuracy: true, timeout: 20_000, maximumAge: 0 });
-  });
-}
 
 const t12 = (t: string) => {
   const [h, m] = t.split(":").map(Number);
@@ -42,18 +30,20 @@ export default function Scan() {
   const [error, setError] = useState("");
   const sent = useRef(false);
   const lastCode = useRef<{ b: string; t: string } | null>(null);
+  const [accuracy, setAccuracy] = useState<number | null>(null);
 
   const submit = useCallback(async (b: string, t: string) => {
     if (sent.current) return; // one scan per visit (also guards React StrictMode double effects)
     sent.current = true;
     lastCode.current = { b, t };
-    setState("locating");
-    let pos: GeolocationPosition;
-    try { pos = await getPosition(); }
+    setState("locating"); setAccuracy(null);
+    if ((await locationPermission()) === "denied") { setError(locationHelp("denied")); setState("error"); return; }
+    let fix;
+    try { fix = await getFix(setAccuracy); }
     catch (e) { setError((e as Error).message); setState("error"); return; }
     setState("busy");
     const { data, error } = await supabase.rpc("scan_attendance", {
-      p_branch: b, p_token: t, p_lat: pos.coords.latitude, p_lng: pos.coords.longitude, p_acc: Math.round(pos.coords.accuracy),
+      p_branch: b, p_token: t, p_lat: fix.lat, p_lng: fix.lng, p_acc: fix.accuracy,
     });
     if (error) { setError(error.message); setState("error"); }
     else { setResult(data as Result); setState("done"); }
@@ -73,7 +63,7 @@ export default function Scan() {
       <div className="mx-auto max-w-md">
         <Link to="/me" className="mb-4 hidden items-center sm:inline-flex gap-1.5 text-[13px] text-ink-3 hover:text-ink"><ArrowLeft className="size-4" />Back</Link>
         {state === "camera" && <Camera_ onCode={(c) => { const p = parseQr(c); if (p) submit(p.b, p.t); else { setError("That isn't an attendance QR code."); setState("error"); } }} />}
-        {state === "locating" && <div className="card flex flex-col items-center p-10 text-center text-ink-3"><MapPin className="mb-3 size-8 animate-pulse text-wine-600" />Getting your location…<span className="mt-1 text-[12px]">Allow location access if your phone asks.</span></div>}
+        {state === "locating" && <div className="card flex flex-col items-center p-10 text-center text-ink-3"><MapPin className="mb-3 size-8 animate-pulse text-wine-600" />Getting your location…<span className="num mt-1 text-[13px] font-medium text-ink-2">{accuracy == null ? "Waiting for GPS" : `Accuracy ±${accuracy} m${accuracy > 30 ? ", improving…" : ""}`}</span><span className="mt-2 text-[12px]">Allow location if your phone asks. Near a window or outdoors is faster.</span></div>}
         {state === "busy" && <div className="card flex flex-col items-center p-10 text-ink-3"><Loader2 className="mb-3 size-8 animate-spin" />Recording your attendance…</div>}
         {state === "done" && result && (
           <div className="card animate-pop flex flex-col items-center p-8 text-center">

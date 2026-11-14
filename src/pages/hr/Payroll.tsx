@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Calculator, ChevronLeft, ChevronRight, Download, Eye, FileText, Lock, Printer, RotateCcw, Search, Unlock } from "lucide-react";
+import { Calculator, ChevronLeft, ChevronRight, Download, Eye, FileSpreadsheet, FileText, Lock, Printer, RotateCcw, Search, Unlock } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import type { Payslip as Slip, PayrollRun, SlipTemplate } from "../../lib/types";
-import { Badge, Button, Empty, IconButton, Modal, PageHeader, Skeleton, useToast } from "../../components/ui";
+import { Badge, Button, Empty, Field, IconButton, Modal, PageHeader, Skeleton, useToast } from "../../components/ui";
+import { buildRegister, downloadRegisterXlsx } from "../../lib/register";
 import { useSettings } from "../../lib/hooks";
-import { computeSlip } from "../../lib/payroll";
+import { computeSlip, loanDue, type SlipExtras } from "../../lib/payroll";
 import Payslip from "../../components/Payslip";
 import { daysInMonth, firstOfMonth, initials, money, monthLabel, parseYmd, ymd } from "../../lib/format";
 
@@ -22,6 +23,35 @@ export default function Payroll() {
   const [q, setQ] = useState("");
   const [preview, setPreview] = useState<Slip | null>(null);
   const [template, setTemplate] = useState<SlipTemplate | null>(null);
+  const [xlsx, setXlsx] = useState<{ branches: { id: string; name: string }[]; branchOf: Map<string, string>; branch: string } | null>(null);
+  const [xlsxBusy, setXlsxBusy] = useState(false);
+
+  /** Opens the register export: multi-branch firms pick a branch (or all) first. */
+  async function openRegister() {
+    const [{ data: b }, { data: e }] = await Promise.all([
+      firm?.multi_branch ? supabase.from("branches").select("id, name").order("name") : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+      supabase.from("employees").select("id, branch_id"),
+    ]);
+    const names = new Map((b ?? []).map((x) => [x.id, x.name]));
+    const branchOf = new Map((e ?? []).map((x) => [x.id, x.branch_id ? names.get(x.branch_id) ?? "" : ""]));
+    const opts = { branches: b ?? [], branchOf, branch: "" };
+    if (!firm?.multi_branch || !(b ?? []).length) return downloadRegister(opts);
+    setXlsx(opts);
+  }
+
+  async function downloadRegister(opts: NonNullable<typeof xlsx>) {
+    if (!firm || !settings) return;
+    setXlsxBusy(true);
+    try {
+      const reg = buildRegister(slips, firm, month, settings.custom_components ?? [], (id) => opts.branchOf.get(id) ?? "", opts.branch || null);
+      if (!reg.rows.length) { toast("error", "No payslips for that branch this month."); return; }
+      const suffix = opts.branch ? `-${opts.branch.replace(/[^A-Za-z0-9]+/g, "-")}` : "";
+      await downloadRegisterXlsx(reg, `Salary-Register-${firm.code}-${month.slice(0, 7)}${suffix}.xlsx`);
+      toast("ok", `Salary register downloaded (${reg.rows.length} employees)`);
+      setXlsx(null);
+    } catch (err) { toast("error", (err as Error).message); }
+    finally { setXlsxBusy(false); }
+  }
 
   async function load() {
     setRun(undefined);
@@ -41,15 +71,28 @@ export default function Payroll() {
     if (!settings || !firm) return;
     setBusy(true);
     const end = ymd(new Date(parseYmd(month).getFullYear(), parseYmd(month).getMonth(), daysInMonth(month)));
-    const [{ data: emps }, { data: att }, { data: hol }] = await Promise.all([
+    const { data: existing } = await supabase.from("payroll_runs").select("id").eq("month", month).maybeSingle();
+    const [{ data: emps }, { data: att }, { data: hol }, { data: amounts }, { data: loans }, { data: recs }] = await Promise.all([
       supabase.from("employees").select("*").eq("status", "active"),
       supabase.from("attendance").select("*").gte("date", month).lte("date", end),
       supabase.from("holidays").select("*").gte("date", month).lte("date", end),
+      supabase.from("employee_head_amounts").select("employee_id, head_id, amount"),
+      supabase.from("loans").select("*").eq("closed", false).lte("start_month", month),
+      supabase.from("loan_recoveries").select("loan_id, amount, run_id"),
     ]);
+    // Balance before this month = principal minus everything recovered in other months (this month is recalculated).
+    const recovered = new Map<string, number>();
+    for (const x of recs ?? []) if (x.run_id !== existing?.id) recovered.set(x.loan_id, (recovered.get(x.loan_id) ?? 0) + Number(x.amount));
+    const extrasFor = (empId: string): SlipExtras => ({
+      headAmounts: new Map((amounts ?? []).filter((a) => a.employee_id === empId).map((a) => [a.head_id, Number(a.amount)])),
+      loans: (loans ?? []).filter((l) => l.employee_id === empId)
+        .map((l) => ({ id: l.id, name: l.name, amount: Math.round(loanDue(l, month, recovered.get(l.id) ?? 0)) }))
+        .filter((l) => l.amount > 0),
+    });
     const eligible = (emps ?? []).filter((e) => (!e.date_of_joining || e.date_of_joining <= end) && (!e.date_of_exit || e.date_of_exit >= month));
     if (!eligible.length) { setBusy(false); return toast("error", "No active employees for this month."); }
 
-    const computed = eligible.map((e) => ({ e, s: computeSlip(e, settings, month, (att ?? []).filter((a) => a.employee_id === e.id), hol ?? []) }));
+    const computed = eligible.map((e) => ({ e, s: computeSlip(e, settings, month, (att ?? []).filter((a) => a.employee_id === e.id), hol ?? [], extrasFor(e.id)) }));
     const totals = computed.reduce((t, x) => ({ g: t.g + x.s.gross, n: t.n + x.s.net_pay }), { g: 0, n: 0 });
 
     const { data: r, error } = await supabase.from("payroll_runs").upsert({
@@ -57,11 +100,20 @@ export default function Payroll() {
     }, { onConflict: "firm_id,month" }).select().single();
     if (error) { setBusy(false); return toast("error", error.message); }
     await supabase.from("payslips").delete().eq("run_id", r.id);
-    const { error: e2 } = await supabase.from("payslips").insert(computed.map(({ e, s }) => ({
+    const { data: inserted, error: e2 } = await supabase.from("payslips").insert(computed.map(({ e, s }) => ({
       run_id: r.id, firm_id: firm.id, employee_id: e.id, month, snapshot: s, gross: s.gross, total_deductions: s.total_deductions, net_pay: s.net_pay,
+    }))).select("id, employee_id");
+    if (e2) { setBusy(false); return toast("error", e2.message); }
+    // Record each loan recovery against its payslip so balances stay correct month to month.
+    const slipOf = new Map((inserted ?? []).map((p) => [p.employee_id, p.id]));
+    const recoveries = computed.flatMap(({ e, s }) => s.deductions.filter((d) => d.loan_id).map((d) => ({
+      loan_id: d.loan_id!, payslip_id: slipOf.get(e.id)!, firm_id: firm.id, run_id: r.id, month, amount: d.amount,
     })));
+    if (recoveries.length) {
+      const { error: e3 } = await supabase.from("loan_recoveries").insert(recoveries);
+      if (e3) { setBusy(false); return toast("error", e3.message); }
+    }
     setBusy(false);
-    if (e2) return toast("error", e2.message);
     toast("ok", `Payroll calculated for ${computed.length} employees`);
     load();
   }
@@ -133,6 +185,7 @@ export default function Payroll() {
                   <option value="classic">Classic</option><option value="modern">Modern</option><option value="compact">Compact</option>
                 </select>
               </label>
+              <Button size="sm" icon={<FileSpreadsheet className="size-4" />} loading={xlsxBusy && !xlsx} onClick={openRegister}>Excel register</Button>
               <Button size="sm" variant="secondary" icon={<Download className="size-4" />} onClick={exportCsv}>Bank CSV</Button>
               <Button size="sm" variant="secondary" icon={<Printer className="size-4" />} onClick={() => window.open(printUrl(), "_blank")}>Print all slips</Button>
               {finalized
@@ -190,6 +243,17 @@ export default function Payroll() {
       <Modal open={!!preview} onClose={() => setPreview(null)} wide title="Payslip preview" description={preview ? `${preview.snapshot.employee.full_name} · ${monthLabel(month)}` : ""}
         footer={<><Button variant="secondary" onClick={() => setPreview(null)}>Close</Button><Button icon={<Printer className="size-4" />} onClick={() => window.open(printUrl(preview!.employee_id), "_blank")}>Print / Save PDF</Button></>}>
         {preview && firm && settings && <div className="overflow-x-auto"><div className="min-w-[640px]"><Payslip firm={firm} opts={{ ...settings, slip_template: tpl }} month={month} slip={preview.snapshot} /></div></div>}
+      </Modal>
+      <Modal open={!!xlsx} onClose={() => setXlsx(null)} title="Download salary register" description={`Excel sheet for ${monthLabel(month)}, one row per employee with a Total row.`}
+        footer={<><Button variant="secondary" onClick={() => setXlsx(null)}>Cancel</Button><Button icon={<FileSpreadsheet className="size-4" />} loading={xlsxBusy} onClick={() => downloadRegister(xlsx!)}>Download</Button></>}>
+        {xlsx && (
+          <Field label="Branch">
+            <select className="input" value={xlsx.branch} onChange={(e) => setXlsx({ ...xlsx, branch: e.target.value })}>
+              <option value="">All branches (one sheet, with a Branch column)</option>
+              {xlsx.branches.map((b) => <option key={b.id} value={b.name}>{b.name}</option>)}
+            </select>
+          </Field>
+        )}
       </Modal>
     </>
   );

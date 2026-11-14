@@ -13,8 +13,20 @@ export interface Firm {
   hr_email: string; logo_url: string | null; employee_limit: number; status: "active" | "suspended"; created_at: string;
 }
 
+/**
+ * A named pay head the firm defines in Settings (e.g. Dearness Allowance, Insurance, LIC).
+ * calc: per_employee = amount set per employee (employee_head_amounts); fixed = same for all; pct_* = percentage.
+ * group: where an earning sits in the salary register (fixed pay vs variable). prorate: cut for absent days.
+ */
 export interface CustomComponent {
-  id: string; name: string; kind: "earning" | "deduction"; calc: "fixed" | "pct_basic" | "pct_gross"; value: number;
+  id: string; name: string; kind: "earning" | "deduction";
+  calc: "per_employee" | "fixed" | "pct_basic" | "pct_gross"; value: number;
+  group?: "fixed" | "variable"; prorate?: boolean;
+}
+
+export interface Loan {
+  id: string; firm_id: string; employee_id: string; name: string; principal: number; emi: number;
+  start_month: string; note: string | null; closed: boolean; created_at: string;
 }
 
 export type SlipTemplate = "classic" | "modern" | "compact";
@@ -63,7 +75,12 @@ export interface PayrollRun {
   total_gross: number; total_net: number; employee_count: number; finalized_at: string | null; created_at: string;
 }
 
-export interface Line { label: string; amount: number }
+/**
+ * One payslip line. key identifies the column in the salary register (basic, hra, pf, c:<head id>, loan:<name>…);
+ * group places earnings under fixed or variable pay; loan_id links a deduction to the loan it recovers.
+ * Older payslips may lack key/group; the register derives them from the label.
+ */
+export interface Line { label: string; amount: number; key?: string; group?: "fixed" | "variable"; loan_id?: string }
 
 export interface SlipSnapshot {
   employee: Pick<Employee, "emp_code" | "full_name" | "designation" | "department" | "date_of_joining" | "pan" | "uan" | "esi_number" | "bank_name" | "bank_account" | "ifsc">;

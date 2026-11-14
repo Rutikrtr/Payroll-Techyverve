@@ -6,10 +6,11 @@ import { useAuth } from "../../lib/auth";
 import type { CustomComponent, FirmSettings, Holiday, SlipTemplate } from "../../lib/types";
 import { Button, cx, Empty, Field, IconButton, PageHeader, Skeleton, Switch, Tabs, useToast } from "../../components/ui";
 import { useSettings } from "../../lib/hooks";
+import { Loans, PayHeads } from "./PayHeadsLoans";
 import Payslip, { SAMPLE_SLIP } from "../../components/Payslip";
 import { dateLabel, firstOfMonth } from "../../lib/format";
 
-type Tab = "attendance" | "deductions" | "components" | "payslip" | "holidays";
+type Tab = "attendance" | "deductions" | "components" | "loans" | "payslip" | "holidays";
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const ACCENTS = ["#7b1e3a", "#081026", "#4b5bfc", "#12805c", "#b45309", "#5e1630"];
 
@@ -55,10 +56,10 @@ export default function Settings() {
   return (
     <>
       <PageHeader title="Settings" subtitle="Attendance rules, deductions and payslip format for your firm."
-        actions={tab !== "holidays" && <Button icon={<Save className="size-4" />} loading={busy} disabled={!dirty} onClick={save}>{dirty ? "Save changes" : "Saved"}</Button>} />
+        actions={tab !== "holidays" && tab !== "loans" && <Button icon={<Save className="size-4" />} loading={busy} disabled={!dirty} onClick={save}>{dirty ? "Save changes" : "Saved"}</Button>} />
       <Tabs value={tab} onChange={(t) => setParams({ tab: t })} items={[
         { value: "attendance", label: "Attendance rules" }, { value: "deductions", label: "Salary & deductions" },
-        { value: "components", label: "Custom components" }, { value: "payslip", label: "Payslip format" }, { value: "holidays", label: "Holidays" },
+        { value: "components", label: "Pay heads" }, { value: "loans", label: "Loans & advances" }, { value: "payslip", label: "Payslip format" }, { value: "holidays", label: "Holidays" },
       ]} />
 
       <div className="mt-5 space-y-4">
@@ -131,36 +132,14 @@ export default function Settings() {
           </Card>
         </>)}
 
-        {tab === "components" && <Components items={s.custom_components} onChange={(c) => up({ custom_components: c })} />}
+        {tab === "components" && <PayHeads items={s.custom_components} onChange={(c) => up({ custom_components: c })} />}
+        {tab === "loans" && <Loans />}
 
         {tab === "payslip" && <PayslipSettings s={s} up={up} />}
 
         {tab === "holidays" && <Holidays />}
       </div>
     </>
-  );
-}
-
-function Components({ items, onChange }: { items: CustomComponent[]; onChange: (c: CustomComponent[]) => void }) {
-  const edit = (i: number, patch: Partial<CustomComponent>) => onChange(items.map((c, j) => (j === i ? { ...c, ...patch } : c)));
-  return (
-    <Card title="Custom earnings & deductions" description="Applied to every employee each month, e.g. meal coupons, loan EMI, performance bonus, canteen deduction.">
-      {items.length === 0 ? <p className="rounded-lg bg-canvas px-4 py-6 text-center text-ink-3">No custom components yet.</p> : (
-        <div className="space-y-3">
-          {items.map((c, i) => (
-            <div key={c.id} className="grid items-end gap-3 rounded-xl border border-line p-3 sm:grid-cols-[2fr_1fr_1.4fr_1fr_auto]">
-              <Field label="Name"><input className="input" value={c.name} onChange={(e) => edit(i, { name: e.target.value })} /></Field>
-              <Field label="Type"><select className="input" value={c.kind} onChange={(e) => edit(i, { kind: e.target.value as CustomComponent["kind"] })}><option value="earning">Earning</option><option value="deduction">Deduction</option></select></Field>
-              <Field label="Calculated as"><select className="input" value={c.calc} onChange={(e) => edit(i, { calc: e.target.value as CustomComponent["calc"] })}><option value="fixed">Fixed amount (₹)</option><option value="pct_basic">% of earned basic</option><option value="pct_gross">% of gross</option></select></Field>
-              <Field label={c.calc === "fixed" ? "Amount" : "Percent"}><input className="input num" type="number" min={0} step="any" value={c.value} onChange={(e) => edit(i, { value: Number(e.target.value) })} /></Field>
-              <IconButton label={`Remove ${c.name}`} className="mb-0.5 hover:text-bad" onClick={() => onChange(items.filter((_, j) => j !== i))}><Trash2 className="size-4" /></IconButton>
-            </div>
-          ))}
-        </div>
-      )}
-      <Button variant="secondary" className="mt-4" icon={<Plus className="size-4" />}
-        onClick={() => onChange([...items, { id: crypto.randomUUID(), name: "New component", kind: "deduction", calc: "fixed", value: 0 }])}>Add component</Button>
-    </Card>
   );
 }
 
