@@ -226,7 +226,7 @@ export default function Dashboard() {
           <p className="mt-3 text-[12px] text-ink-4">Today is {dateLabel(t)}</p>
         </section>
       </div>
-      <div className="mt-4"><InstallApp share={!!firm?.multi_branch} /></div>
+      <div className="mt-4"><InstallApp share /></div>
     </>
   );
 }

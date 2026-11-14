@@ -34,7 +34,7 @@ export default function Employees() {
   const [branchFilter, setBranchFilter] = useState("all");
 
   const loadAccess = useCallback(async () => {
-    if (!multi) return;
+
     const [{ data: b }, { data: p }] = await Promise.all([
       supabase.from("branches").select("id, name").order("name"),
       supabase.from("profiles").select("employee_id, login_id").eq("role", "employee"),
@@ -110,7 +110,7 @@ export default function Employees() {
           : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[820px]">
-                <thead><tr><th className="th">Employee</th><th className="th">{multi ? "Branch" : "Department"}</th>{multi && <th className="th">Login ID</th>}<th className="th">Joined</th><th className="th text-right">Monthly gross</th><th className="th">Statutory</th><th className="th">Status</th><th className="th w-12" /></tr></thead>
+                <thead><tr><th className="th">Employee</th><th className="th">{multi ? "Branch" : "Department"}</th><th className="th">App login</th><th className="th">Joined</th><th className="th text-right">Monthly gross</th><th className="th">Statutory</th><th className="th">Status</th><th className="th w-12" /></tr></thead>
                 <tbody>
                   {list.map((e) => (
                     <tr key={e.id} className="hover:bg-canvas/60">
@@ -121,7 +121,7 @@ export default function Employees() {
                         </div>
                       </td>
                       <td className="td text-ink-2">{multi ? branchName(e.branch_id) : e.department || "—"}</td>
-                      {multi && <td className="td">{logins.get(e.id) ? <span className="font-mono text-[13px]">{logins.get(e.id)}</span> : <span className="text-[12px] text-ink-4">No login</span>}</td>}
+                      {<td className="td">{logins.get(e.id) ? <span className="font-mono text-[13px]">{logins.get(e.id)}</span> : <span className="text-[12px] text-ink-4">No login</span>}</td>}
                       <td className="td text-ink-2">{dateLabel(e.date_of_joining)}</td>
                       <td className="td num text-right font-medium">{money(monthlyGross(e))}</td>
                       <td className="td"><div className="flex gap-1">{e.pf_applicable && <Badge>PF</Badge>}{e.esi_applicable && <Badge>ESI</Badge>}</div></td>
@@ -184,9 +184,9 @@ export default function Employees() {
               <Switch label="ESI applicable" description="Deduct ESI when gross is under the threshold" checked={!!draft.esi_applicable} onChange={(v) => setDraft({ ...draft, esi_applicable: v })} />
               <Switch label="Active" description="Inactive employees are excluded from attendance and payroll" checked={draft.status === "active"} onChange={(v) => setDraft({ ...draft, status: v ? "active" : "inactive" })} />
             </div>
-            {multi && draft.id && (
+            {draft.id && (
               <Link to={`/app/employees/${draft.id}`} className="flex items-center justify-between rounded-xl border border-line p-4 text-[14px] hover:border-wine-300">
-                <span><b>App login, transfers & payslips</b><span className="block text-[13px] text-ink-3">{logins.get(draft.id) ? `Login ID ${logins.get(draft.id)}` : "No app login yet"} · open the employee page</span></span>
+                <span><b>{multi ? "App login, transfers & payslips" : "App login & payslips"}</b><span className="block text-[13px] text-ink-3">{logins.get(draft.id) ? `Login ID ${logins.get(draft.id)}` : "No app login yet"} · open the employee page</span></span>
                 <span className="text-wine-700">Open →</span>
               </Link>
             )}

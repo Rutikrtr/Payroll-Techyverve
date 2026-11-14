@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Navigate } from "react-router-dom";
+
 import { Building, KeyRound, LocateFixed, MapPin, Plus, Printer, QrCode as QrIcon, Trash2, Users } from "lucide-react";
 import { firmUsers, supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
@@ -46,7 +46,7 @@ export default function Branches() {
 
   const loginPreview = useMemo(() => `${firm?.code}-${form.username.toLowerCase().replace(/[^a-z0-9]/g, "") || "branch"}`, [firm, form.username]);
 
-  if (firm && !firm.multi_branch) return <Navigate to="/app" replace />;
+  const single = !!firm && !firm.multi_branch;
 
   async function submit(e: FormEvent) {
     e.preventDefault(); setBusy(true);
@@ -80,8 +80,8 @@ export default function Branches() {
 
   return (
     <>
-      <PageHeader title="Branches" subtitle="Each branch has a kiosk login that shows today's attendance QR. Employees scan it to check in and out."
-        actions={<Button icon={<Plus className="size-4" />} onClick={() => setCreate(true)}>New branch</Button>} />
+      <PageHeader title={single ? "Office & QR" : "Branches"} subtitle={single ? "Show today's QR on the office screen. Employees scan it from their app to check in and out." : "Each branch has a kiosk login that shows today's attendance QR. Employees scan it to check in and out."}
+        actions={!single && <Button icon={<Plus className="size-4" />} onClick={() => setCreate(true)}>New branch</Button>} />
 
       {rows === null ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-48" />)}</div>
         : rows.length === 0 ? (
@@ -97,26 +97,26 @@ export default function Branches() {
                     <h2 className="truncate text-[17px] font-medium">{b.name}</h2>
                     <p className="mt-0.5 flex items-center gap-1 truncate text-[13px] text-ink-3"><MapPin className="size-3.5 shrink-0" />{b.address || "No address"}</p>
                   </div>
-                  <IconButton label={`Delete ${b.name}`} className="hover:text-bad" onClick={() => setDel(b)}><Trash2 className="size-4" /></IconButton>
+                  {!single && <IconButton label={`Delete ${b.name}`} className="hover:text-bad" onClick={() => setDel(b)}><Trash2 className="size-4" /></IconButton>}
                 </div>
                 <div className="mt-4 grid grid-cols-3 gap-2 text-center">
                   {[["Staff", b.staff], ["Checked in", b.inToday], ["Checked out", b.outToday]].map(([k, v]) => (
                     <div key={k} className="rounded-lg bg-canvas py-2.5"><div className="num font-display text-[20px] font-medium">{v}</div><div className="text-[11px] text-ink-3">{k}</div></div>
                   ))}
                 </div>
-                <div className="mt-4 rounded-lg border border-dashed border-line px-3 py-2 text-[13px]">
+                {b.login_id && <div className="mt-4 rounded-lg border border-dashed border-line px-3 py-2 text-[13px]">
                   <span className="text-ink-3">Kiosk login ID </span><span className="font-mono font-medium">{b.login_id ?? "—"}</span>
-                </div>
+                </div>}
                 <div className={`mt-2 flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] ${b.lat != null ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"}`}>
                   <LocateFixed className="size-4 shrink-0" />
                   {b.lat != null
                     ? <span>Geofence on · within {b.radius_m} m · <a className="font-medium underline" href={mapsUrl(b.lat, b.lng!)} target="_blank" rel="noreferrer">map</a></span>
                     : <span>No location set: scans are recorded but allowed from anywhere</span>}
                 </div>
-                <div className="mt-4 flex gap-2 pt-1">
+                <div className="mt-4 flex flex-wrap gap-2 pt-1">
                   <Button size="sm" className="flex-1" icon={<QrIcon className="size-4" />} onClick={() => showQr(b)}>Today's QR</Button>
                   <Button size="sm" variant="secondary" icon={<LocateFixed className="size-4" />} onClick={() => setGeo(b)}>Location</Button>
-                  <Button size="sm" variant="secondary" icon={<KeyRound className="size-4" />} onClick={() => setPw({ branch: b, value: "" })}>Password</Button>
+                  {b.login_id && <Button size="sm" variant="secondary" icon={<KeyRound className="size-4" />} onClick={() => setPw({ branch: b, value: "" })}>Password</Button>}
                 </div>
               </section>
             ))}
@@ -125,7 +125,7 @@ export default function Branches() {
 
       <div className="mt-6 flex items-start gap-3 rounded-xl bg-indigo-50 px-4 py-3 text-[13px] text-indigo-900 ring-1 ring-indigo-100">
         <Users className="mt-0.5 size-4 shrink-0" />
-        <p>Assign employees to a branch and create their logins from <b>Employees</b>. An employee can only check in with the QR of their own branch, and the QR changes every day at midnight.</p>
+        <p>{single ? <>Create each employee's app login from <b>Employees</b>. Employees can only check in with today's QR from this office, and the QR changes every day at midnight.</> : <>Assign employees to a branch and create their logins from <b>Employees</b>. An employee can only check in with the QR of their own branch, and the QR changes every day at midnight.</>}</p>
       </div>
 
       <Modal open={create} onClose={() => setCreate(false)} title="New branch" description="The branch login only shows company info, today's QR and the day's check-ins."

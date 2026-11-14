@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
   if (me?.role !== "hr") return json({ error: "Only the firm admin can manage logins" }, 403);
   const { data: firm } = await admin.from("firms").select("id, code, status, multi_branch").eq("id", me.firm_id).single();
   if (!firm || firm.status !== "active") return json({ error: "Workspace is suspended" }, 403);
-  if (!firm.multi_branch) return json({ error: "Branches and employee logins are available for multi-branch firms only" }, 403);
+  // Single-branch firms have one office (created automatically) and the same secure employee logins.
 
   async function createLogin(loginId: string, password: string, profile: Record<string, unknown>) {
     const { data: u, error } = await admin.auth.admin.createUser({
@@ -65,6 +65,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     switch (body.action) {
       case "create_branch": {
+        if (!firm.multi_branch) return json({ error: "A single-branch workspace has one office. Ask us to switch to multi-branch to add more." }, 403);
         const name = String(body.name ?? "").trim();
         const username = slug(String(body.username ?? ""));
         if (!name || !username) return json({ error: "Branch name and login username are required" }, 400);
@@ -78,6 +79,7 @@ Deno.serve(async (req) => {
       }
 
       case "delete_branch": {
+        if (!firm.multi_branch) return json({ error: "The office of a single-branch workspace cannot be deleted" }, 403);
         const { data: b } = await admin.from("branches").select("id").eq("id", body.branch_id).eq("firm_id", firm.id).maybeSingle();
         if (!b) return json({ error: "Branch not found" }, 404);
         const { count } = await admin.from("employees").select("id", { count: "exact", head: true }).eq("branch_id", b.id).eq("status", "active");

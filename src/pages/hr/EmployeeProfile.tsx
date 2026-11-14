@@ -66,8 +66,7 @@ export default function EmployeeProfile() {
       leave: rows.filter((r) => r.status === "paid_leave").length,
       late: rows.filter((r) => r.is_late).length,
     });
-    if (multi) { const { data: l } = await supabase.rpc("employee_login_status", { p_employee: id }); setLogin((l as LoginStatus) ?? null); }
-    else setLogin(null);
+    { const { data: l } = await supabase.rpc("employee_login_status", { p_employee: id }); setLogin((l as LoginStatus) ?? null); }
   }, [id, multi]);
   useEffect(() => { load(); }, [load]);
 
@@ -176,7 +175,7 @@ export default function EmployeeProfile() {
             </Card>
           )}
 
-          {multi && (
+          {(
             <Card title="App login" icon={<Smartphone className="size-4" />}>
               {login === undefined ? <Skeleton className="h-20" /> : !login ? (
                 <>
