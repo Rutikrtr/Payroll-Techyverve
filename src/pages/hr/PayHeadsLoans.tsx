@@ -5,7 +5,7 @@ import { useAuth } from "../../lib/auth";
 import { useEmployees } from "../../lib/hooks";
 import type { CustomComponent, Loan } from "../../lib/types";
 import { Badge, Button, cx, Empty, Field, IconButton, Modal, Skeleton, useToast } from "../../components/ui";
-import { firstOfMonth, money, monthLabel } from "../../lib/format";
+import { firstOfMonth, initials, money, monthLabel } from "../../lib/format";
 
 function Card({ title, description, action, children }: { title: string; description?: string; action?: ReactNode; children: ReactNode }) {
   return (
@@ -124,6 +124,7 @@ function HeadAmounts({ head, onClose }: { head: CustomComponent | null; onClose:
 
   const list = (employees ?? []).filter((e) => [e.full_name, e.emp_code].some((v) => v.toLowerCase().includes(q.toLowerCase())));
   const total = Object.values(values).reduce((t, v) => t + (Number(v) || 0), 0);
+  const setCount = Object.values(values).filter((v) => Number(v) > 0).length;
 
   async function save(e: FormEvent) {
     e.preventDefault(); setBusy(true);
@@ -144,21 +145,34 @@ function HeadAmounts({ head, onClose }: { head: CustomComponent | null; onClose:
       description={`Monthly amount in ₹. Leave empty or 0 for none.${head?.kind === "earning" && head.prorate !== false ? " Reduced for absent days." : ""}`}
       footer={<><span className="mr-auto self-center text-[13px] text-ink-3">Total <b className="num text-ink">{money(total)}</b> / month</span>
         <Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" form="head-amounts" loading={busy}>Save amounts</Button></>}>
-      <div className="mb-3 flex items-center gap-2 rounded-lg border border-line px-3">
-        <Search className="size-4 text-ink-4" aria-hidden />
-        <input aria-label="Search employees" className="h-9 flex-1 bg-transparent outline-none" placeholder="Search employee…" value={q} onChange={(e) => setQ(e.target.value)} />
+      {/* Search stays pinned while the list scrolls under it. */}
+      <div className="sticky -top-5 z-10 -mx-6 -mt-5 mb-3 flex items-center gap-3 border-b border-line bg-white/95 px-6 py-3 backdrop-blur">
+        <div className="flex h-10 flex-1 items-center gap-2 rounded-lg border border-line bg-white px-3 focus-within:border-wine-600 focus-within:ring-4 focus-within:ring-wine-100">
+          <Search className="size-4 shrink-0 text-ink-4" aria-hidden />
+          <input aria-label="Search employees" className="h-full min-w-0 flex-1 bg-transparent outline-none" placeholder="Search name or code…" value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
+        <span className="shrink-0 rounded-full bg-canvas px-2.5 py-1 text-[12px] text-ink-3 ring-1 ring-line"><b className="num text-ink">{setCount}</b> of {(employees ?? []).length} set</span>
       </div>
       {employees === null ? <Skeleton className="h-40" /> : (
-        <form id="head-amounts" onSubmit={save} className="divide-y divide-line rounded-xl border border-line">
-          {list.map((emp) => (
-            <label key={emp.id} className="flex items-center gap-3 px-3 py-2">
-              <span className="min-w-0 flex-1"><span className="block truncate font-medium">{emp.full_name}</span><span className="text-[12px] text-ink-3">{emp.emp_code}</span></span>
-              <span className="text-ink-3">₹</span>
-              <input className="input num h-9 w-32 text-right" type="number" min={0} step="1" inputMode="numeric" placeholder="0"
-                aria-label={`${head?.name} for ${emp.full_name}`} value={values[emp.id] ?? ""} onChange={(e) => setValues({ ...values, [emp.id]: e.target.value })} />
-            </label>
-          ))}
-          {list.length === 0 && <p className="p-4 text-center text-ink-3">No employees match.</p>}
+        <form id="head-amounts" onSubmit={save} className="overflow-hidden rounded-xl border border-line">
+          {list.map((emp, i) => {
+            const has = Number(values[emp.id]) > 0;
+            return (
+              <label key={emp.id} className={cx("flex cursor-text items-center gap-3 px-3 py-2.5 transition-colors hover:bg-wine-50/40", i > 0 && "border-t border-line")}>
+                <span className={cx("flex size-8 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold", has ? "bg-wine-100 text-wine-800" : "bg-canvas text-ink-3")} aria-hidden>{initials(emp.full_name)}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[14px] font-medium leading-tight">{emp.full_name}</span>
+                  <span className="text-[12px] text-ink-3">{emp.emp_code}</span>
+                </span>
+                <span className="relative w-32 shrink-0 sm:w-36">
+                  <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[13px] text-ink-4">₹</span>
+                  <input className="input num h-9 pl-7 text-right" type="number" min={0} step="1" inputMode="numeric" placeholder="—"
+                    aria-label={`${head?.name} for ${emp.full_name}`} value={values[emp.id] ?? ""} onChange={(e) => setValues({ ...values, [emp.id]: e.target.value })} />
+                </span>
+              </label>
+            );
+          })}
+          {list.length === 0 && <p className="p-6 text-center text-[13px] text-ink-3">No employee matches “{q}”.</p>}
         </form>
       )}
     </Modal>

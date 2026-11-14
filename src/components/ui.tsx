@@ -111,7 +111,7 @@ export function Modal({ open, onClose, title, description, children, footer, wid
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && closeRef.current();
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
-    ref.current?.querySelector<HTMLElement>("input,select,textarea")?.focus();
+    ref.current?.querySelector<HTMLElement>("input,select,textarea")?.focus({ preventScroll: true });
     return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
   }, [open]);
   if (!open) return null;
@@ -120,16 +120,17 @@ export function Modal({ open, onClose, title, description, children, footer, wid
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6">
       <div className="absolute inset-0 bg-ink/40 backdrop-blur-[2px]" onClick={onClose} aria-hidden />
       <div ref={ref} role="dialog" aria-modal="true" aria-label={title}
-        className={cx("relative w-full bg-white sm:rounded-2xl rounded-t-2xl shadow-pop animate-pop flex flex-col max-h-[92vh]", wide ? "sm:max-w-3xl" : "sm:max-w-lg")}>
-        <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-4 border-b border-line">
+        className={cx("relative w-full bg-white sm:rounded-2xl rounded-t-2xl shadow-pop animate-pop flex flex-col max-h-[92vh] max-h-[92dvh] overflow-hidden", wide ? "sm:max-w-3xl" : "sm:max-w-lg")}>
+        {/* Header and footer never scroll away; only the body scrolls (min-h-0 lets it shrink inside the flex column). */}
+        <div className="flex shrink-0 items-start justify-between gap-4 px-6 pt-5 pb-4 border-b border-line">
           <div>
             <h2 className="text-[18px] font-medium">{title}</h2>
             {description && <p className="text-[13px] text-ink-3 mt-0.5">{description}</p>}
           </div>
           <IconButton label="Close" onClick={onClose}><X className="size-4" /></IconButton>
         </div>
-        <div className="overflow-y-auto px-6 py-5">{children}</div>
-        {footer && <div className="flex justify-end gap-2 px-6 py-4 border-t border-line bg-[#fafaf9] sm:rounded-b-2xl">{footer}</div>}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-5">{children}</div>
+        {footer && <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 px-6 py-4 border-t border-line bg-[#fafaf9]">{footer}</div>}
       </div>
     </div>,
     document.body,
