@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, ArrowRightLeft, Building, Copy, FileText, KeyRound, Lock, LogOut, MessageCircle, Smartphone, UserX } from "lucide-react";
 import { firmUsers, supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
-import type { Branch, Employee } from "../../lib/types";
+import type { Branch, CustomComponent, Employee } from "../../lib/types";
 import { Badge, Button, Empty, Field, Modal, PageHeader, Skeleton, useToast } from "../../components/ui";
 import { dateLabel, firstOfMonth, initials, money, monthLabel, today } from "../../lib/format";
 import { monthlyGross } from "../../lib/payroll";
@@ -38,6 +38,7 @@ export default function EmployeeProfile() {
   const [move, setMove] = useState<{ to: string; date: string; note: string } | null>(null);
   const [code, setCode] = useState<{ code: string; expires_at: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [heads, setHeads] = useState<[string, number][]>([]);
 
   const load = useCallback(async () => {
     const [{ data: e }, { data: b }, { data: t }, { data: s }, { data: a }] = await Promise.all([
@@ -47,6 +48,16 @@ export default function EmployeeProfile() {
       supabase.from("payslips").select("id, run_id, month, gross, total_deductions, net_pay, payroll_runs(status)").eq("employee_id", id!).order("month", { ascending: false }),
       supabase.from("attendance").select("status, is_late").eq("employee_id", id!).gte("date", firstOfMonth()).lte("date", today()),
     ]);
+    const [{ data: fs }, { data: ha }] = await Promise.all([
+      supabase.from("firm_settings").select("custom_components").maybeSingle(),
+      supabase.from("employee_head_amounts").select("head_id, amount").eq("employee_id", id!),
+    ]);
+    const amt = new Map((ha ?? []).map((h) => [h.head_id as string, Number(h.amount)]));
+    // Earning pay heads with a rupee amount (per employee or same for all) are part of the monthly salary.
+    setHeads(((fs?.custom_components ?? []) as CustomComponent[])
+      .filter((c) => c.kind === "earning" && (c.calc === "per_employee" || c.calc === "fixed"))
+      .map((c): [string, number] => [c.name, c.calc === "fixed" ? Number(c.value) : amt.get(c.id) ?? 0])
+      .filter(([, v]) => v > 0));
     setEmp(e); setBranches(b ?? []); setTransfers(t ?? []); setSlips((s as unknown as SlipRow[]) ?? []);
     const rows = a ?? [];
     setMonth({
@@ -83,10 +94,13 @@ export default function EmployeeProfile() {
 
   if (!emp) return <div className="space-y-4"><Skeleton className="h-10 w-72" /><Skeleton className="h-64" /></div>;
 
-  const gross = monthlyGross(emp);
+  const components = ([
+    ["Basic", Number(emp.basic)], ["HRA", Number(emp.hra)], ["Conveyance", Number(emp.conveyance)],
+    ["Special allowance", Number(emp.special_allowance)], ["Other allowance", Number(emp.other_allowance)], ...heads,
+  ] as [string, number][]).filter(([k, v]) => k === "Basic" || v > 0);
+  const gross = monthlyGross(emp) + heads.reduce((t, [, v]) => t + v, 0);
   const appUrl = `${window.location.origin}/get-app`;
   const shareText = code && login ? `Your ${firm?.name} attendance app login:\nLogin ID: ${login.login_id}\nOne-time code: ${code.code}\n(valid 15 minutes)\nInstall: ${appUrl}` : "";
-  const components: [string, number][] = [["Basic", emp.basic], ["HRA", emp.hra], ["Conveyance", emp.conveyance], ["Special allowance", emp.special_allowance], ["Other allowance", emp.other_allowance]];
 
   return (
     <>
