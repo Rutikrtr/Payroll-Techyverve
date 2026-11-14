@@ -165,6 +165,12 @@ function PayslipSettings({ s, up }: { s: FirmSettings; up: (p: Partial<FirmSetti
           </div>
         </Card>
         <Card title="Company logo"><LogoUpload onChange={(l) => l && up({ slip_show_logo: true })} /></Card>
+        <Card title="Name on payslip">
+          <Field label="Firm name printed on payslips" hint={`Any language, e.g. Marathi. Leave empty to use “${firm?.legal_name || firm?.name || "the firm name"}”. Only payslips change; the app and register keep the usual name.`}>
+            <input className="input" maxLength={150} lang="mr" value={s.slip_firm_name ?? ""} placeholder={firm?.legal_name || firm?.name || ""}
+              onChange={(e) => up({ slip_firm_name: e.target.value.trim() ? e.target.value : null })} />
+          </Field>
+        </Card>
         <Card title="Brand colour">
           <div className="flex flex-wrap items-center gap-2">
             {ACCENTS.map((c) => <button key={c} type="button" aria-label={`Accent ${c}`} aria-pressed={s.slip_accent === c} onClick={() => up({ slip_accent: c })}

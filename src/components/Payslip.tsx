@@ -1,7 +1,7 @@
 import type { Firm, FirmSettings, Line, SlipSnapshot } from "../lib/types";
 import { amountInWords, dateLabel, money2, monthLabel } from "../lib/format";
 
-type Opts = Pick<FirmSettings, "slip_template" | "slip_accent" | "slip_show_bank" | "slip_show_attendance" | "slip_show_logo" | "slip_amount_in_words" | "slip_footer">;
+type Opts = Pick<FirmSettings, "slip_template" | "slip_accent" | "slip_show_bank" | "slip_show_attendance" | "slip_show_logo" | "slip_amount_in_words" | "slip_footer"> & Partial<Pick<FirmSettings, "slip_firm_name">>;
 
 interface Props { firm: Firm; opts: Opts; month: string; slip: SlipSnapshot }
 
@@ -49,7 +49,7 @@ function Classic({ firm, opts, month, slip }: Props) {
       <div className="flex items-center gap-4 px-6 py-5" style={{ borderBottom: `3px solid ${a}` }}>
         {opts.slip_show_logo && <FirmMark firm={firm} accent={a} />}
         <div className="flex-1">
-          <div className="font-display text-[18px] font-semibold">{firm.legal_name || firm.name}</div>
+          <div className="font-display text-[18px] font-semibold">{opts.slip_firm_name?.trim() || firm.legal_name || firm.name}</div>
           <div className="text-ink-3">{address(firm)}</div>
         </div>
         <div className="text-right">
@@ -103,7 +103,7 @@ function Modern({ firm, opts, month, slip }: Props) {
       <div className="flex items-start justify-between gap-4 px-7 py-6 text-white" style={{ background: `linear-gradient(135deg, ${a}, #14060c)` }}>
         <div className="flex items-center gap-3">
           {opts.slip_show_logo && <div className="rounded-lg bg-white/15 p-1"><FirmMark firm={firm} accent="transparent" size={40} /></div>}
-          <div><div className="font-display text-[18px] font-semibold">{firm.legal_name || firm.name}</div><div className="text-white/70">{address(firm)}</div></div>
+          <div><div className="font-display text-[18px] font-semibold">{opts.slip_firm_name?.trim() || firm.legal_name || firm.name}</div><div className="text-white/70">{address(firm)}</div></div>
         </div>
         <div className="text-right"><div className="text-white/60 text-[11px] uppercase tracking-wider">Salary slip</div><div className="font-display text-[16px] font-semibold">{monthLabel(month)}</div></div>
       </div>
@@ -147,7 +147,7 @@ function Compact({ firm, opts, month, slip }: Props) {
   return (
     <div className="bg-white px-6 py-5 text-[12px] text-ink" style={{ borderTop: `4px solid ${a}`, boxShadow: "0 0 0 1px #e6e8ef" }}>
       <div className="flex items-baseline justify-between">
-        <div className="flex items-center gap-2">{opts.slip_show_logo && <FirmMark firm={firm} accent={a} size={28} />}<span className="font-display text-[15px] font-semibold">{firm.name}</span></div>
+        <div className="flex items-center gap-2">{opts.slip_show_logo && <FirmMark firm={firm} accent={a} size={28} />}<span className="font-display text-[15px] font-semibold">{opts.slip_firm_name?.trim() || firm.legal_name || firm.name}</span></div>
         <span className="text-ink-3">Payslip · {monthLabel(month)}</span>
       </div>
       <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-ink-2">

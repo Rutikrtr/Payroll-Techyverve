@@ -42,7 +42,7 @@ export interface FirmSettings {
   tds_enabled: boolean; tds_rate: number;
   custom_components: CustomComponent[];
   slip_template: SlipTemplate; slip_accent: string; slip_show_bank: boolean; slip_show_attendance: boolean;
-  slip_show_logo: boolean; slip_amount_in_words: boolean; slip_footer: string;
+  slip_show_logo: boolean; slip_amount_in_words: boolean; slip_footer: string; slip_firm_name?: string | null;
 }
 
 export interface Employee {
