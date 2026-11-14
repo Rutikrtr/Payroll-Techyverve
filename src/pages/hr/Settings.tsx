@@ -80,6 +80,7 @@ export default function Settings() {
               <Field label="Shift end"><input type="time" className="input" value={s.shift_end.slice(0, 5)} onChange={(e) => up({ shift_end: e.target.value })} /></Field>
               <Field label="Late grace (minutes)" hint="Check-in after start + grace is late"><input min={0} {...num("late_grace_minutes")} /></Field>
               <Field label="Late marks per half-day cut" hint="0 disables the late penalty"><input min={0} {...num("lates_per_half_day")} /></Field>
+              <Field label="Minimum hours for a full day" hint="QR check-out before this counts as a half day"><input min={0} max={24} step={0.5} {...num("half_day_min_hours")} /></Field>
             </div>
           </Card>
           <Card title="Leave & unmarked days">
