@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Lightbulb, LightbulbOff, Radio, Search } from "lucide-react";
+import { Radio } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { cx, PageHeader, Skeleton } from "../../components/ui";
@@ -34,10 +34,6 @@ export default function LiveOffice() {
   const [emps, setEmps] = useState<Emp[] | null>(null);
   const [att, setAtt] = useState<Map<string, Att>>(new Map());
   const [day, setDay] = useState(today());
-  const [branchId, setBranchId] = useState<string | null>(null);
-  const [q, setQ] = useState("");
-  const [filter, setFilter] = useState<"all" | State>("all");
-  const [focus, setFocus] = useState<string | null>(null);
   const [live, setLive] = useState(false);
   const [now, setNow] = useState(new Date());
 
@@ -59,7 +55,6 @@ export default function LiveOffice() {
       if (cancelled) return;
       setBranches(b ?? []); setEmps(e ?? []);
       setAtt(new Map((a ?? []).map((r) => [r.employee_id, r as Att])));
-      setBranchId((cur) => cur ?? b?.[0]?.id ?? null);
     })();
     return () => { cancelled = true; };
   }, [day]);
@@ -85,104 +80,32 @@ export default function LiveOffice() {
   }, [firm]);
 
   const multi = !!firm?.multi_branch && (branches?.length ?? 0) > 1;
-  const staffOf = (bid: string | null) => (emps ?? []).filter((e) => !multi || e.branch_id === bid);
-  const staff = staffOf(branchId);
-  const counts = (list: Emp[]) => list.reduce((c, e) => { c[stateOf(att.get(e.id))]++; return c; }, { in: 0, out: 0, leave: 0, absent: 0, notin: 0 } as Record<State, number>);
-  const c = counts(staff);
-  const lightsOn = c.in > 0;
-  const branchName = branches?.find((b) => b.id === branchId)?.name ?? "Office";
+  const staffOf = (bid: string) => (emps ?? []).filter((e) => !multi || e.branch_id === bid);
 
-  const list = staff.filter((e) => (filter === "all" || stateOf(att.get(e.id)) === filter)
-    && [e.full_name, e.emp_code, e.designation ?? ""].some((v) => v.toLowerCase().includes(q.toLowerCase())));
+  if (!emps || !branches) return <div className="space-y-4"><Skeleton className="h-10 w-72" /><Skeleton className="h-[560px]" /></div>;
 
-  if (!emps || !branches) return <div className="space-y-4"><Skeleton className="h-10 w-72" /><Skeleton className="h-[520px]" /></div>;
+  const inTotal = emps.filter((e) => stateOf(att.get(e.id)) === "in").length;
+  const room = (b: Branch): Room => ({ id: b.id, name: b.name, staff: staffOf(b.id) });
+  const main: Room = branches[0] ? room(branches[0]) : { id: "main", name: "Office", staff: emps };
 
   return (
     <>
-      <PageHeader title="Live office" subtitle="See who is in the office right now. A desk light turns on when someone checks in and off when they leave."
-        actions={<span className={cx("inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[12px] font-medium ring-1", live ? "bg-emerald-50 text-emerald-800 ring-emerald-200" : "bg-canvas text-ink-3 ring-line")}>
-          <Radio className={cx("size-3.5", live && "animate-pulse")} />{live ? "Live" : "Connecting…"} · {now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
-        </span>} />
+      <PageHeader title="Live office" subtitle="Who is in right now. Hover a person for details."
+        actions={<div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-[12px] ring-1 ring-line">
+            <span className="size-2 rounded-full bg-emerald-500" /><b className="num">{inTotal}</b>/{emps.length} in office
+          </span>
+          <span className={cx("inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[12px] font-medium ring-1", live ? "bg-emerald-50 text-emerald-800 ring-emerald-200" : "bg-canvas text-ink-3 ring-line")}>
+            <Radio className={cx("size-3.5", live && "animate-pulse")} />{live ? "Live" : "Connecting…"} · {now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+          </span>
+        </div>} />
 
-      {multi && (() => {
-        const room = (b: Branch): Room => ({ id: b.id, name: b.name, staff: staffOf(b.id) });
-        return (
-          <section className="card mb-4 overflow-hidden p-2">
-            <HoverLayer att={att}>{(onHover) => (
-              <Campus firmName={firm?.name ?? ""} logo={firm?.logo_url ?? null} main={room(branches[0])} others={branches.slice(1).map(room)} att={att}
-                selected={branchId} onHover={onHover}
-                onSelect={(id) => { setBranchId(id); setFocus(null); document.getElementById("live-floor")?.scrollIntoView({ behavior: "smooth", block: "start" }); }} />
-            )}</HoverLayer>
-          </section>
-        );
-      })()}
-
-      <div id="live-floor" className="grid scroll-mt-6 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-
-        <section className="card overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3.5">
-            <div className="min-w-0">
-              <div className="eyebrow">{!multi || branchId === branches[0]?.id ? "Main branch · HQ" : "Branch"}</div>
-              <h2 className="truncate text-[17px] font-medium">{branchName}</h2>
-            </div>
-            <span className={cx("inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium", lightsOn ? "bg-amber-50 text-amber-800 ring-1 ring-amber-200" : "bg-canvas text-ink-3 ring-1 ring-line")}>
-              {lightsOn ? <Lightbulb className="size-3.5" /> : <LightbulbOff className="size-3.5" />}{lightsOn ? "Lights on" : "Lights off"}
-            </span>
-          </div>
-          <HoverLayer att={att}>{(onHover) => <Floor title={firm?.name ?? branchName} staff={staff} att={att} lightsOn={lightsOn} focus={focus} onPick={setFocus} onHover={onHover} />}</HoverLayer>
-          <div className="grid grid-cols-2 gap-px border-t border-line bg-line sm:grid-cols-5">
-            {(["in", "out", "notin", "leave", "absent"] as State[]).map((s) => (
-              <button key={s} type="button" onClick={() => setFilter(filter === s ? "all" : s)} aria-pressed={filter === s}
-                className={cx("flex cursor-pointer items-center gap-2 bg-white px-4 py-3 text-left transition-colors hover:bg-canvas", filter === s && "bg-wine-50")}>
-                <span className={cx("size-2 rounded-full", DOT[s])} aria-hidden />
-                <span className="min-w-0"><span className="num block font-display text-[18px] font-medium leading-none">{c[s]}</span><span className="text-[11px] text-ink-3">{LABEL[s]}</span></span>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <aside className="card flex max-h-[680px] flex-col overflow-hidden">
-          <div className="border-b border-line p-3">
-            <div className="flex h-10 items-center gap-2 rounded-lg border border-line px-3 focus-within:border-wine-600 focus-within:ring-4 focus-within:ring-wine-100">
-              <Search className="size-4 text-ink-4" aria-hidden />
-              <input aria-label="Search people" className="h-full min-w-0 flex-1 bg-transparent outline-none" placeholder="Search name, code, role…" value={q} onChange={(e) => setQ(e.target.value)} />
-            </div>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {(["all", "in", "out", "notin"] as const).map((f) => (
-                <button key={f} type="button" onClick={() => setFilter(f)} aria-pressed={filter === f}
-                  className={cx("cursor-pointer rounded-full px-2.5 py-1 text-[12px] ring-1 transition-colors", filter === f ? "bg-ink text-white ring-ink" : "text-ink-2 ring-line hover:ring-ink-4")}>
-                  {f === "all" ? `All ${staff.length}` : `${LABEL[f]} ${c[f]}`}
-                </button>
-              ))}
-            </div>
-          </div>
-          <ul className="min-h-0 flex-1 divide-y divide-line overflow-y-auto">
-            {list.map((e) => {
-              const a = att.get(e.id); const s = stateOf(a);
-              return (
-                <li key={e.id}>
-                  <button type="button" onClick={() => setFocus(focus === e.id ? null : e.id)}
-                    className={cx("flex w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-canvas", focus === e.id && "bg-wine-50")}>
-                    <span className="relative">
-                      <span className="flex size-9 items-center justify-center rounded-full text-[12px] font-semibold text-white" style={{ background: `hsl(${hue(e.full_name)} 45% ${s === "in" ? 45 : 70}%)` }}>{initials(e.full_name)}</span>
-                      <span className={cx("absolute -bottom-0.5 -right-0.5 size-3 rounded-full ring-2 ring-white", DOT[s])} aria-hidden />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[14px] font-medium">{e.full_name}</span>
-                      <span className="block truncate text-[12px] text-ink-3">{e.designation || e.emp_code}</span>
-                    </span>
-                    <span className="shrink-0 text-right text-[11px] leading-tight text-ink-3">
-                      <span className={cx("block font-medium", s === "in" ? "text-emerald-700" : "text-ink-2")}>{LABEL[s]}</span>
-                      {a?.check_in && <span className="num">{hhmm(a.check_in)}{a.check_out ? ` – ${hhmm(a.check_out)}` : ""}</span>}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-            {list.length === 0 && <li className="p-6 text-center text-[13px] text-ink-3">Nobody here.</li>}
-          </ul>
-        </aside>
-      </div>
+      <section className="card overflow-hidden p-2">
+        <HoverLayer att={att}>{(onHover) => (
+          <Campus firmName={firm?.name ?? ""} logo={firm?.logo_url ?? null} main={main} others={multi ? branches.slice(1).map(room) : []}
+            att={att} onHover={onHover} />
+        )}</HoverLayer>
+      </section>
     </>
   );
 }
@@ -219,20 +142,6 @@ function Plant({ x, y, s = 1 }: { x: number; y: number; s?: number }) {
 }
 
 type HoverFn = (e: Emp | null, ev?: React.MouseEvent) => void;
-
-/** Full office floor (one branch) with its background and the "nobody in" note. */
-function Floor(props: { title: string; staff: Emp[]; att: Map<string, Att>; lightsOn: boolean; focus: string | null; onPick: (id: string) => void; onHover?: HoverFn }) {
-  return (
-    <div className="relative" style={{ background: props.lightsOn ? "linear-gradient(180deg,#fbf8f3,#f3eee6)" : "linear-gradient(180deg,#f4f6f9,#e9edf2)" }}>
-      <FloorScene {...props} />
-      {!props.lightsOn && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
-          <span className="rounded-full bg-white/90 px-3 py-1 text-[12px] text-ink-3 shadow-sm ring-1 ring-line">Nobody has checked in yet · desk lights are off</span>
-        </div>
-      )}
-    </div>
-  );
-}
 
 /** The isometric room as an <svg>; with `box` it renders as a nested room inside a larger SVG (campus view). */
 function FloorScene({ title, staff, att, lightsOn, focus, onPick, onHover, box }: {
@@ -418,9 +327,9 @@ function useNarrow() {
   return narrow;
 }
 
-function Campus({ firmName, logo, main, others, att, selected, onSelect, onHover }: {
-  firmName: string; logo: string | null; main: Room; others: Room[]; att: Map<string, Att>; selected: string | null;
-  onSelect: (id: string) => void; onHover: HoverFn;
+function Campus({ firmName, logo, main, others, att, onHover }: {
+  firmName: string; logo: string | null; main: Room; others: Room[]; att: Map<string, Att>;
+  onHover: HoverFn;
 }) {
   const narrow = useNarrow();
   const motion = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -451,14 +360,14 @@ function Campus({ firmName, logo, main, others, att, selected, onSelect, onHover
   }
 
   const roomFrame = (r: Room, f: number[], isMain = false) => {
-    const [x, y, w, h] = f; const n = inCount(r); const on = n > 0; const sel = selected === r.id;
+    const [x, y, w, h] = f; const n = inCount(r); const on = n > 0; 
     const title = (() => { const t = `${firmName} · ${r.name}`; const max = Math.floor((w - 150) / 7); return t.length > max ? `${t.slice(0, max - 1)}…` : t; })();
     return (
       <g key={r.id}>
         {on && <rect x={x - 5} y={y - 5} width={w + 10} height={h + 10} rx={20} fill={isMain ? "#a3305a" : "#10b981"} opacity={0.14} className={motion ? "cp-glow" : undefined} />}
-        <rect x={x} y={y} width={w} height={h} rx={16} fill={on ? "#fbf8f3" : "#f5f6f8"} stroke={sel ? "#a3305a" : "#e6e1da"} strokeWidth={sel ? 2.2 : 1}
+        <rect x={x} y={y} width={w} height={h} rx={16} fill={on ? "#fbf8f3" : "#f5f6f8"} stroke={isMain ? "#d9c3cc" : "#e6e1da"} strokeWidth={1}
           style={{ filter: "drop-shadow(0 8px 18px rgba(20,6,12,.08))" }} />
-        <g className="cursor-pointer" onClick={() => onSelect(r.id)}>
+        <g>
           <rect x={x} y={y} width={w} height={HEAD} rx={16} fill="#ffffff" />
           <rect x={x} y={y + HEAD - 1} width={w} height={1} fill="#eee8e1" />
           {isMain && <rect x={x + 16} y={y} width={w - 32} height={4} rx={2} fill="#7a1f3f" />}
@@ -471,7 +380,7 @@ function Campus({ firmName, logo, main, others, att, selected, onSelect, onHover
           {on && motion && <circle cx={x + w - 78} cy={y + HEAD / 2} r={7} fill="none" stroke="#ffcf4d" className="cp-ping" />}
           <text x={x + w - 14} y={y + HEAD / 2 + 4} textAnchor="end" fontSize={12} fill="#6b6470"><tspan fontWeight={700} fill={on ? "#047857" : "#1a1216"}>{n}</tspan>/{r.staff.length} in</text>
         </g>
-        <FloorScene title={isMain ? firmName : r.name} staff={r.staff} att={att} lightsOn={on} focus={null} onPick={() => onSelect(r.id)} onHover={onHover}
+        <FloorScene title={isMain ? firmName : r.name} staff={r.staff} att={att} lightsOn={on} focus={null} onPick={() => {}} onHover={onHover}
           box={{ x: x + 6, y: y + HEAD + 4, width: w - 12, height: h - HEAD - 10 }} />
       </g>
     );
@@ -488,7 +397,7 @@ function Campus({ firmName, logo, main, others, att, selected, onSelect, onHover
         .cp-glow { animation: cp-glow 2.4s ease-in-out infinite; }
         .cp-ping { animation: cp-ping 1.8s ease-out infinite; }
       `}</style>
-      <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full" role="img" aria-label="All branches">
+      <svg viewBox={`0 0 ${W} ${H}`} className="mx-auto block h-auto w-full max-h-[calc(100dvh-170px)]" role="img" aria-label="All branches">
         <defs><pattern id="cp-dots" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.1" fill="#e3dcd3" /></pattern></defs>
         <rect width={W} height={H} fill="url(#cp-dots)" />
         {others.map((r, i) => {
