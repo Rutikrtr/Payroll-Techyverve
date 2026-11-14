@@ -137,7 +137,7 @@ export default function LiveOffice() {
               {lightsOn ? <Lightbulb className="size-3.5" /> : <LightbulbOff className="size-3.5" />}{lightsOn ? "Lights on" : "Lights off"}
             </span>
           </div>
-          <Floor staff={staff} att={att} lightsOn={lightsOn} focus={focus} onPick={setFocus} />
+          <Floor title={firm?.name ?? branchName} staff={staff} att={att} lightsOn={lightsOn} focus={focus} onPick={setFocus} />
           <div className="grid grid-cols-2 gap-px border-t border-line bg-line sm:grid-cols-5">
             {(["in", "out", "notin", "leave", "absent"] as State[]).map((s) => (
               <button key={s} type="button" onClick={() => setFilter(filter === s ? "all" : s)} aria-pressed={filter === s}
@@ -195,85 +195,168 @@ export default function LiveOffice() {
   );
 }
 
-/* ───────────── Isometric floor ───────────── */
+/* ───────────── Isometric office floor (light, modern) ───────────── */
 
-const TW = 76, TH = 38; // iso tile size
+const TW = 56, TH = 28, ZH = 30; // one floor unit across, one unit deep, one unit high (px)
+const P = (x: number, y: number, z = 0) => [(x - y) * (TW / 2), (x + y) * (TH / 2) - z * ZH] as const;
+const pts = (...p: (readonly [number, number])[]) => p.map(([a, b]) => `${a.toFixed(1)},${b.toFixed(1)}`).join(" ");
 
-function Floor({ staff, att, lightsOn, focus, onPick }: { staff: Emp[]; att: Map<string, Att>; lightsOn: boolean; focus: string | null; onPick: (id: string) => void }) {
+/** A solid box: top, front-left and front-right faces. */
+function Box({ x, y, z = 0, w, d, h, top, left, right, stroke, opacity }: {
+  x: number; y: number; z?: number; w: number; d: number; h: number; top: string; left: string; right: string; stroke?: string; opacity?: number;
+}) {
+  return (
+    <g opacity={opacity}>
+      <polygon points={pts(P(x, y + d, z), P(x + w, y + d, z), P(x + w, y + d, z + h), P(x, y + d, z + h))} fill={left} stroke={stroke} strokeWidth={0.5} />
+      <polygon points={pts(P(x + w, y, z), P(x + w, y + d, z), P(x + w, y + d, z + h), P(x + w, y, z + h))} fill={right} stroke={stroke} strokeWidth={0.5} />
+      <polygon points={pts(P(x, y, z + h), P(x + w, y, z + h), P(x + w, y + d, z + h), P(x, y + d, z + h))} fill={top} stroke={stroke} strokeWidth={0.5} />
+    </g>
+  );
+}
+
+function Plant({ x, y, s = 1 }: { x: number; y: number; s?: number }) {
+  const [cx, cy] = P(x + 0.2 * s, y + 0.2 * s, 0.45 * s);
+  return (
+    <g>
+      <Box x={x} y={y} w={0.4 * s} d={0.4 * s} h={0.35 * s} top="#e7e2da" left="#cfc8bd" right="#bfb7aa" />
+      <circle cx={cx - 5 * s} cy={cy - 2 * s} r={8 * s} fill="#5fa36a" />
+      <circle cx={cx + 5 * s} cy={cy - 5 * s} r={8 * s} fill="#4f9460" />
+      <circle cx={cx} cy={cy - 12 * s} r={8 * s} fill="#6db477" />
+    </g>
+  );
+}
+
+function Floor({ title, staff, att, lightsOn, focus, onPick }: {
+  title: string; staff: Emp[]; att: Map<string, Att>; lightsOn: boolean; focus: string | null; onPick: (id: string) => void;
+}) {
   const n = Math.max(staff.length, 1);
-  const cols = Math.max(3, Math.min(8, Math.ceil(Math.sqrt(n * 1.4))));
-  const rows = Math.max(2, Math.ceil(n / cols));
-  const iso = (c: number, r: number) => ({ x: (c - r) * (TW / 2), y: (c + r) * (TH / 2) });
-  // Floor spans desks plus a one-tile walkway margin.
-  const m = 0.9;
-  const corners = [iso(-m, -m), iso(cols - 1 + m, -m), iso(cols - 1 + m, rows - 1 + m), iso(-m, rows - 1 + m)];
-  const minX = Math.min(...corners.map((p) => p.x)) - 20, maxX = Math.max(...corners.map((p) => p.x)) + 20;
-  const minY = Math.min(...corners.map((p) => p.y)) - 90, maxY = Math.max(...corners.map((p) => p.y)) + 40;
-  const wallH = 70;
-  const [a, b, cc, d] = corners;
-  const desks = useMemo(() => staff.map((e, i) => ({ e, ...iso(i % cols, Math.floor(i / cols)) })), [staff, cols]); // eslint-disable-line react-hooks/exhaustive-deps
+  const perRow = Math.max(3, Math.min(7, Math.ceil(Math.sqrt(n * 1.3))));
+  const rows = Math.ceil(n / perRow);
+  const deskPos = (i: number) => {
+    const c = i % perRow, r = Math.floor(i / perRow);
+    return { x: 1.1 + c * 1.6, y: 1.3 + r * 1.75 + Math.floor(r / 2) * 0.55 };
+  };
+  const workW = 1.1 + perRow * 1.6 + 0.3;
+  const workD = deskPos((rows - 1) * perRow).y + 2.2;
+  const RW = workW + 4.6, RD = Math.max(workD, 8.6), WALL = 2.6;
+
+  const corners = [P(0, 0, WALL), P(RW, 0, WALL), P(0, RD, WALL), P(RW, RD, 0), P(0, RD, 0), P(RW, 0, 0)];
+  const minX = Math.min(...corners.map((c) => c[0])) - 16, maxX = Math.max(...corners.map((c) => c[0])) + 16;
+  const minY = Math.min(...corners.map((c) => c[1])) - 12, maxY = Math.max(...corners.map((c) => c[1])) + 18;
+
+  const desks = useMemo(() => staff.map((e, i) => ({ e, ...deskPos(i) })), [staff, perRow]); // eslint-disable-line react-hooks/exhaustive-deps
+  const skew = Math.atan(TH / TW) * (180 / Math.PI);
+  const mx = workW + 0.4, my = 0.6; // meeting room origin
+  const lx = workW + 0.6, ly = RD - 3.4; // lounge origin
 
   return (
-    <div className={cx("relative transition-colors duration-700", lightsOn ? "bg-[#fbf6ee]" : "bg-[#1b1720]")}>
-      <svg viewBox={`${minX} ${minY} ${maxX - minX} ${maxY - minY}`} className="block h-auto w-full max-h-[560px]" role="img" aria-label={`Office floor, ${staff.length} desks`}>
+    <div className="relative" style={{ background: lightsOn ? "linear-gradient(180deg,#fbf8f3,#f3eee6)" : "linear-gradient(180deg,#f4f6f9,#e9edf2)" }}>
+      <svg viewBox={`${minX} ${minY} ${maxX - minX} ${maxY - minY}`} className="block h-auto w-full max-h-[600px]" role="img" aria-label={`Office floor with ${staff.length} desks`}>
         <defs>
-          <radialGradient id="lamp" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#ffd77a" stopOpacity=".85" /><stop offset="100%" stopColor="#ffd77a" stopOpacity="0" /></radialGradient>
-          <linearGradient id="floorOn" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stopColor="#f3ebdf" /><stop offset="100%" stopColor="#e7dccb" /></linearGradient>
-          <linearGradient id="floorOff" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stopColor="#3a3440" /><stop offset="100%" stopColor="#2b2631" /></linearGradient>
+          <radialGradient id="lo-lamp"><stop offset="0%" stopColor="#ffcf6b" stopOpacity=".75" /><stop offset="100%" stopColor="#ffcf6b" stopOpacity="0" /></radialGradient>
+          <radialGradient id="lo-pend"><stop offset="0%" stopColor="#fff3c4" stopOpacity=".9" /><stop offset="100%" stopColor="#fff3c4" stopOpacity="0" /></radialGradient>
+          <linearGradient id="lo-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#cfe6f7" /><stop offset="100%" stopColor="#eaf4fb" /></linearGradient>
         </defs>
-        {/* back walls */}
-        <polygon points={`${a.x},${a.y} ${b.x},${b.y} ${b.x},${b.y - wallH} ${a.x},${a.y - wallH}`} fill={lightsOn ? "#efe6d8" : "#2a2530"} stroke={lightsOn ? "#d9ccb8" : "#3b3542"} />
-        <polygon points={`${a.x},${a.y} ${d.x},${d.y} ${d.x},${d.y - wallH} ${a.x},${a.y - wallH}`} fill={lightsOn ? "#e6dccb" : "#24202a"} stroke={lightsOn ? "#d9ccb8" : "#3b3542"} />
-        {/* windows on the right wall */}
-        {[0.25, 0.55].map((t) => {
-          const x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t, w = (b.x - a.x) * 0.18, h = (b.y - a.y) * 0.18;
-          return <polygon key={t} points={`${x},${y - 18} ${x + w},${y + h - 18} ${x + w},${y + h - 52} ${x},${y - 52}`} fill={lightsOn ? "#cfe3f2" : "#3b4a63"} stroke={lightsOn ? "#b7cfe2" : "#4a5875"} />;
+
+        {/* walls */}
+        <polygon points={pts(P(0, 0), P(RW, 0), P(RW, 0, WALL), P(0, 0, WALL))} fill="#f7f6f3" stroke="#e2ddd4" />
+        <polygon points={pts(P(0, 0), P(0, RD), P(0, RD, WALL), P(0, 0, WALL))} fill="#eeebe5" stroke="#e2ddd4" />
+        {/* windows along the back wall */}
+        {Array.from({ length: Math.max(2, Math.floor(RW / 2.6)) }, (_, i) => {
+          const x0 = 2.4 + i * 2.6; if (x0 + 1.8 > RW - 0.4) return null;
+          return <polygon key={i} points={pts(P(x0, 0, 0.9), P(x0 + 1.8, 0, 0.9), P(x0 + 1.8, 0, 2.25), P(x0, 0, 2.25))} fill="url(#lo-sky)" stroke="#c5d7e6" />;
         })}
+        {/* company sign on the back wall */}
+        {(() => {
+          const [sx, sy] = P(0.35, 0, 1.75);
+          return (
+            <g transform={`translate(${sx},${sy}) skewY(${skew})`}>
+              <rect x={0} y={-16} width={Math.min(150, 26 + title.length * 6)} height={24} rx={4} fill="#7a1f3f" />
+              <text x={10} y={0} fontSize={10.5} fontWeight={700} fill="#fff">{title.length > 22 ? `${title.slice(0, 21)}…` : title}</text>
+            </g>
+          );
+        })()}
         {/* floor */}
-        <polygon points={corners.map((p) => `${p.x},${p.y}`).join(" ")} fill={`url(#${lightsOn ? "floorOn" : "floorOff"})`} stroke={lightsOn ? "#d6c7b1" : "#433c4a"} />
-        {/* ceiling lights strip (on when anyone is in) */}
-        {Array.from({ length: cols }, (_, i) => {
-          const p = iso(i, -m + 0.15);
-          return <ellipse key={i} cx={p.x} cy={p.y - wallH + 8} rx={10} ry={4} fill={lightsOn ? "#ffe8a3" : "#4a4352"} opacity={lightsOn ? 1 : 0.8} />;
-        })}
-        {desks.map(({ e, x, y }) => <Desk key={e.id} e={e} x={x} y={y} state={stateOf(att.get(e.id))} focused={focus === e.id} dim={!lightsOn} onPick={onPick} att={att.get(e.id)} />)}
+        <polygon points={pts(P(0, 0), P(RW, 0), P(RW, RD), P(0, RD))} fill={lightsOn ? "#efe7da" : "#e8e4dc"} stroke="#d9d0c1" />
+        {Array.from({ length: Math.floor(RW) }, (_, i) => <line key={`gx${i}`} x1={P(i + 1, 0)[0]} y1={P(i + 1, 0)[1]} x2={P(i + 1, RD)[0]} y2={P(i + 1, RD)[1]} stroke="#e2d8c8" strokeWidth={0.6} />)}
+        {Array.from({ length: Math.floor(RD) }, (_, i) => <line key={`gy${i}`} x1={P(0, i + 1)[0]} y1={P(0, i + 1)[1]} x2={P(RW, i + 1)[0]} y2={P(RW, i + 1)[1]} stroke="#e2d8c8" strokeWidth={0.6} />)}
+        {/* rug under the work area */}
+        <polygon points={pts(P(0.7, 0.9), P(workW - 0.1, 0.9), P(workW - 0.1, workD - 0.4), P(0.7, workD - 0.4))} fill="#e3e8ee" opacity={0.55} />
+
+        {/* meeting room (glass) */}
+        <polygon points={pts(P(mx, my), P(mx + 3.6, my), P(mx + 3.6, my + 3.2), P(mx, my + 3.2))} fill="#e9eef3" />
+        <Box x={mx + 0.9} y={my + 1} w={1.8} d={1.1} h={0.5} top="#ffffff" left="#dfe4ea" right="#d2d8df" stroke="#cfd6de" />
+        {[[0.6, 0.6], [1.5, 0.45], [2.4, 0.6], [0.6, 2.2], [1.5, 2.35], [2.4, 2.2]].map(([a, b], i) => (
+          <Box key={i} x={mx + a} y={my + b} w={0.4} d={0.35} h={0.32} top="#9aa5b4" left="#7f8a99" right="#727d8b" />
+        ))}
+        <polygon points={pts(P(mx, my + 3.2), P(mx + 3.6, my + 3.2), P(mx + 3.6, my + 3.2, 1.9), P(mx, my + 3.2, 1.9))} fill="#bcd9ee" opacity={0.28} stroke="#a9c8de" />
+        <polygon points={pts(P(mx, my), P(mx, my + 3.2), P(mx, my + 3.2, 1.9), P(mx, my, 1.9))} fill="#bcd9ee" opacity={0.22} stroke="#a9c8de" />
+        {(() => { const [tx, ty] = P(mx + 1.8, my + 3.2, 1.6); return <text x={tx} y={ty} textAnchor="middle" fontSize={8} fontWeight={600} fill="#55708a">Meeting room</text>; })()}
+
+        {/* lounge */}
+        <Box x={lx} y={ly} w={2.6} d={0.7} h={0.45} top="#9fb3c8" left="#869bb1" right="#7a8fa5" />
+        <Box x={lx} y={ly} z={0.45} w={2.6} d={0.22} h={0.45} top="#a9bccf" left="#8ea3b8" right="#8297ac" />
+        <Box x={lx + 0.8} y={ly + 1.2} w={1} d={0.6} h={0.3} top="#d9c2a0" left="#c3aa86" right="#b59c78" />
+        <Plant x={RW - 0.8} y={RD - 0.9} s={1.1} />
+        <Plant x={0.3} y={RD - 0.8} />
+        <Plant x={workW - 0.5} y={0.35} s={0.9} />
+
+        {/* pendant lights over the desk rows */}
+        {Array.from({ length: rows }, (_, r) => Array.from({ length: Math.ceil(perRow / 2) }, (_, k) => {
+          const { x, y } = deskPos(r * perRow + k * 2); const [px, py] = P(x + 1.4, y + 0.6, 2.25);
+          return (
+            <g key={`p${r}-${k}`}>
+              {lightsOn && <ellipse cx={px} cy={py + 34} rx={34} ry={14} fill="url(#lo-pend)" />}
+              <line x1={px} y1={py - 22} x2={px} y2={py} stroke="#b8b2a8" strokeWidth={0.8} />
+              <path d={`M${px - 8},${py + 4} L${px - 4},${py - 2} L${px + 4},${py - 2} L${px + 8},${py + 4} Z`} fill={lightsOn ? "#ffe39a" : "#cfcac2"} stroke="#a8a196" strokeWidth={0.5} />
+            </g>
+          );
+        }))}
+
+        {desks.map(({ e, x, y }) => <Desk key={e.id} e={e} x={x} y={y} state={stateOf(att.get(e.id))} focused={focus === e.id} onPick={onPick} att={att.get(e.id)} />)}
       </svg>
-      {!lightsOn && <div className="pointer-events-none absolute inset-x-0 bottom-3 text-center text-[12px] text-white/60">Nobody is in the office right now</div>}
+      {!lightsOn && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
+          <span className="rounded-full bg-white/90 px-3 py-1 text-[12px] text-ink-3 shadow-sm ring-1 ring-line">Nobody has checked in yet · desk lights are off</span>
+        </div>
+      )}
     </div>
   );
 }
 
-function Desk({ e, x, y, state, focused, dim, onPick, att }: { e: Emp; x: number; y: number; state: State; focused: boolean; dim: boolean; onPick: (id: string) => void; att?: Att }) {
+function Desk({ e, x, y, state, focused, onPick, att }: { e: Emp; x: number; y: number; state: State; focused: boolean; onPick: (id: string) => void; att?: Att }) {
   const on = state === "in";
-  const w = 26, h = 13, t = 9; // desk top half-size and thickness
-  const top = `${x},${y - h} ${x + w},${y} ${x},${y + h} ${x - w},${y}`;
-  const left = `${x - w},${y} ${x},${y + h} ${x},${y + h + t} ${x - w},${y + t}`;
-  const right = `${x + w},${y} ${x},${y + h} ${x},${y + h + t} ${x + w},${y + t}`;
-  const skin = `hsl(${hue(e.full_name)} 45% 55%)`;
+  const shirt = `hsl(${hue(e.full_name)} 48% ${on ? 52 : 70}%)`;
   const tip = `${e.full_name} · ${LABEL[state]}${att?.check_in ? ` · in ${hhmm(att.check_in)}` : ""}${att?.check_out ? ` · out ${hhmm(att.check_out)}` : ""}`;
+  const [hx, hy] = P(x + 0.6, y + 0.32, 1.12);
+  const [gx, gy] = P(x + 0.6, y + 0.85, 0.47);
+  const [lx, ly] = P(x + 1.05, y + 0.75, 0.45);
+  const [bx, by] = P(x + 1.2, y + 1.15, 0.9);
+  const pin = { in: "#10b981", out: "#0ea5e9", leave: "#a78bfa", absent: "#f43f5e", notin: "#9ca3af" }[state];
   return (
     <g className="cursor-pointer" onClick={() => onPick(e.id)} role="button" aria-label={tip} tabIndex={0}
       onKeyDown={(ev) => (ev.key === "Enter" || ev.key === " ") && onPick(e.id)}>
       <title>{tip}</title>
-      {on && <ellipse cx={x} cy={y + 4} rx={44} ry={22} fill="url(#lamp)" className="transition-opacity duration-700" />}
-      {focused && <ellipse cx={x} cy={y + 4} rx={36} ry={18} fill="none" stroke="#a3305a" strokeWidth={2.5} strokeDasharray="4 3" />}
-      {/* chair + person behind the desk */}
-      <ellipse cx={x - 2} cy={y - 10} rx={8} ry={4} fill={dim ? "#3d3644" : "#cbbfae"} />
+      {focused && <polygon points={pts(P(x - 0.1, y - 0.1), P(x + 1.35, y - 0.1), P(x + 1.35, y + 1.35), P(x - 0.1, y + 1.35))} fill="#a3305a" opacity={0.14} stroke="#a3305a" strokeDasharray="4 3" />}
+      {/* chair */}
+      <Box x={x + 0.38} y={y + 0.12} w={0.44} d={0.4} h={0.28} top="#5b6676" left="#4a5462" right="#424b58" />
+      <Box x={x + 0.38} y={y + 0.08} z={0.28} w={0.44} d={0.1} h={0.45} top="#667283" left="#535e6d" right="#4a5462" />
+      {/* person */}
       {on && <>
-        <rect x={x - 8} y={y - 30} width={14} height={16} rx={6} fill={skin} />
-        <circle cx={x - 1} cy={y - 35} r={6.5} fill="#f2cfae" stroke={skin} strokeWidth={1.5} />
+        <Box x={x + 0.42} y={y + 0.22} z={0.28} w={0.36} d={0.26} h={0.62} top={shirt} left={shirt} right={shirt} opacity={0.95} />
+        <circle cx={hx} cy={hy} r={7.2} fill="#f1c9a5" stroke="#d9a982" strokeWidth={0.8} />
+        <path d={`M${hx - 7},${hy - 1} a7,7 0 0 1 14,0 q-7,-4 -14,0z`} fill="#3b2f2a" />
       </>}
       {/* desk */}
-      <polygon points={left} fill={dim ? "#2f2a35" : "#c9b79c"} />
-      <polygon points={right} fill={dim ? "#28232d" : "#b9a587"} />
-      <polygon points={top} fill={dim ? "#423b49" : "#ead9bf"} stroke={dim ? "#4d4554" : "#d2bf9f"} strokeWidth={0.8} />
-      {/* monitor: glows when the person is in */}
-      <polygon points={`${x + 3},${y - 4} ${x + 15},${y + 2} ${x + 15},${y - 10} ${x + 3},${y - 16}`} fill={on ? "#7dd3fc" : dim ? "#1f1c24" : "#5b6472"} stroke={on ? "#38bdf8" : "none"} />
+      {on && <ellipse cx={gx} cy={gy} rx={30} ry={13} fill="url(#lo-lamp)" />}
+      <Box x={x} y={y + 0.55} w={1.25} d={0.62} h={0.45} top="#ffffff" left="#e3e6ea" right="#d5d9df" stroke="#d0d5db" />
+      {/* monitor (screen faces the person; glow shows on the desk) */}
+      <Box x={x + 0.32} y={y + 0.7} z={0.45} w={0.56} d={0.06} h={0.38} top="#2b313a" left={on ? "#3b82f6" : "#39414c"} right="#262c34" />
       {/* desk lamp */}
-      <line x1={x - 16} y1={y - 2} x2={x - 16} y2={y - 14} stroke={dim ? "#57505e" : "#8a7a64"} strokeWidth={1.5} />
-      <circle cx={x - 16} cy={y - 15} r={3.5} fill={on ? "#ffd166" : dim ? "#3a3440" : "#a99a85"} />
-      {/* status pin */}
-      <circle cx={x + w - 6} cy={y - 2} r={3} fill={{ in: "#10b981", out: "#0ea5e9", leave: "#a78bfa", absent: "#f43f5e", notin: "#9ca3af" }[state]} />
+      <line x1={lx} y1={ly} x2={lx} y2={ly - 12} stroke="#9aa2ad" strokeWidth={1.4} />
+      <circle cx={lx} cy={ly - 13} r={3.4} fill={on ? "#ffc845" : "#cfd4da"} stroke={on ? "#f5a300" : "#b9c0c8"} strokeWidth={0.6} />
+      {/* status pin + initials badge */}
+      <circle cx={bx} cy={by} r={3.3} fill={pin} stroke="#fff" strokeWidth={1.2} />
     </g>
   );
 }

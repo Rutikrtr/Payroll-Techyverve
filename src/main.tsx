@@ -4,7 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-route
 import { Loader2 } from "lucide-react";
 import "./index.css";
 import "./lib/install";
-import { installStaleChunkRecovery } from "./lib/staleChunk"; // listen for the install prompt from the very first load
+import { installStaleChunkRecovery, installUpdateCheck } from "./lib/staleChunk"; // listen for the install prompt from the very first load
 import { AuthProvider, HOME, useAuth } from "./lib/auth";
 import type { Role } from "./lib/types";
 import { ToastProvider } from "./components/ui";
@@ -53,6 +53,7 @@ function Home() {
 
 // Old tabs after a deploy: reload once to the new version instead of failing to load a page or the Excel export.
 installStaleChunkRecovery();
+installUpdateCheck();
 
 // Installable app (PWA). Skipped in dev so Vite hot reload is never served from cache.
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
