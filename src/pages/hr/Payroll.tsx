@@ -6,6 +6,7 @@ import { useAuth } from "../../lib/auth";
 import type { Payslip as Slip, PayrollRun, SlipTemplate } from "../../lib/types";
 import { Badge, Button, Empty, Field, IconButton, Modal, PageHeader, Skeleton, useToast } from "../../components/ui";
 import { buildRegister, downloadRegisterXlsx } from "../../lib/register";
+import { isStaleChunkError, reloadForNewVersion } from "../../lib/staleChunk";
 import { useSettings } from "../../lib/hooks";
 import { computeSlip, loanDue, type SlipExtras } from "../../lib/payroll";
 import Payslip from "../../components/Payslip";
@@ -49,7 +50,10 @@ export default function Payroll() {
       await downloadRegisterXlsx(reg, `Salary-Register-${firm.code}-${month.slice(0, 7)}${suffix}.xlsx`);
       toast("ok", `Salary register downloaded (${reg.rows.length} employees)`);
       setXlsx(null);
-    } catch (err) { toast("error", (err as Error).message); }
+    } catch (err) {
+      if (isStaleChunkError(err)) { toast("ok", "The app was updated. Reloading, then click Excel register again."); reloadForNewVersion(); return; }
+      toast("error", (err as Error).message);
+    }
     finally { setXlsxBusy(false); }
   }
 
