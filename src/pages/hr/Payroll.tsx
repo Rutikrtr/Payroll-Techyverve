@@ -92,7 +92,10 @@ export default function Payroll() {
     const eligible = (emps ?? []).filter((e) => (!e.date_of_joining || e.date_of_joining <= end) && (!e.date_of_exit || e.date_of_exit >= month));
     if (!eligible.length) { setBusy(false); return toast("error", "No active employees for this month."); }
 
-    const computed = eligible.map((e) => ({ e, s: computeSlip(e, settings, month, (att ?? []).filter((a) => a.employee_id === e.id), hol ?? [], extrasFor(e.id)) }));
+    // No payslip for someone with nothing earned this month (e.g. salary not set up yet, or no paid days).
+    const computed = eligible.map((e) => ({ e, s: computeSlip(e, settings, month, (att ?? []).filter((a) => a.employee_id === e.id), hol ?? [], extrasFor(e.id)) }))
+      .filter(({ s }) => s.gross > 0);
+    if (!computed.length) { setBusy(false); return toast("error", "No one has earnings this month. Check salaries and attendance."); }
     const totals = computed.reduce((t, x) => ({ g: t.g + x.s.gross, n: t.n + x.s.net_pay }), { g: 0, n: 0 });
 
     const { data: r, error } = await supabase.from("payroll_runs").upsert({
