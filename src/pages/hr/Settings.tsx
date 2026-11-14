@@ -8,6 +8,7 @@ import { Button, cx, Empty, Field, IconButton, PageHeader, Skeleton, Switch, Tab
 import { useSettings } from "../../lib/hooks";
 import { Loans, PayHeads } from "./PayHeadsLoans";
 import Payslip, { SAMPLE_SLIP } from "../../components/Payslip";
+import LogoUpload from "../../components/LogoUpload";
 import { dateLabel, firstOfMonth } from "../../lib/format";
 
 type Tab = "attendance" | "deductions" | "components" | "loans" | "payslip" | "holidays";
@@ -163,6 +164,7 @@ function PayslipSettings({ s, up }: { s: FirmSettings; up: (p: Partial<FirmSetti
             ))}
           </div>
         </Card>
+        <Card title="Company logo"><LogoUpload onChange={(l) => l && up({ slip_show_logo: true })} /></Card>
         <Card title="Brand colour">
           <div className="flex flex-wrap items-center gap-2">
             {ACCENTS.map((c) => <button key={c} type="button" aria-label={`Accent ${c}`} aria-pressed={s.slip_accent === c} onClick={() => up({ slip_accent: c })}

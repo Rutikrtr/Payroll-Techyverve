@@ -92,9 +92,14 @@ export default function Layout() {
       </div>
       {!mini && (
         <div className="px-3 pb-2">
-          <div className="rounded-lg bg-white/[.06] px-3 py-2.5 ring-1 ring-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,.06)]">
-            <div className="text-[11px] uppercase tracking-[0.08em] text-white/45">{profile?.role === "superadmin" ? "Platform" : "Workspace"}</div>
-            <div className="mt-0.5 truncate text-[14px] font-medium" title={name}>{profile?.role === "superadmin" ? "Super Admin Console" : firm?.name}</div>
+          <div className="flex items-center gap-3 rounded-lg bg-white/[.06] px-3 py-2.5 ring-1 ring-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,.06)]">
+            {profile?.role !== "superadmin" && firm?.logo_url && (
+              <img src={firm.logo_url} alt="" className="size-9 shrink-0 rounded-md bg-white object-contain p-0.5" />
+            )}
+            <div className="min-w-0">
+              <div className="text-[11px] uppercase tracking-[0.08em] text-white/45">{profile?.role === "superadmin" ? "Platform" : "Workspace"}</div>
+              <div className="mt-0.5 truncate text-[14px] font-medium" title={name}>{profile?.role === "superadmin" ? "Super Admin Console" : firm?.name}</div>
+            </div>
           </div>
         </div>
       )}
