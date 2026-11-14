@@ -25,7 +25,7 @@ export interface CustomComponent {
 }
 
 export interface Loan {
-  id: string; firm_id: string; employee_id: string; name: string; principal: number; emi: number;
+  id: string; firm_id: string; employee_id: string; name: string; principal: number | null; emi: number;
   start_month: string; note: string | null; closed: boolean; created_at: string;
 }
 

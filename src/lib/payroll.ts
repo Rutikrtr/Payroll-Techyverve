@@ -19,9 +19,13 @@ export interface LoanDue { id: string; name: string; amount: number }
 /** Per-employee inputs beyond the salary structure: pay head amounts and loan EMIs due. */
 export interface SlipExtras { headAmounts?: Map<string, number>; loans?: LoanDue[] }
 
-/** Month's recovery for a loan: the EMI, or what is left if less; nothing before the start month or once closed/repaid. */
-export function loanDue(loan: { emi: number; principal: number; start_month: string; closed: boolean }, month: string, recoveredBefore: number) {
+/**
+ * Month's deduction for a loan: nothing before the start month or once stopped. With a total amount it stops when
+ * repaid (the last month takes only what is left); without one it repeats every month until stopped or removed.
+ */
+export function loanDue(loan: { emi: number; principal: number | null; start_month: string; closed: boolean }, month: string, recoveredBefore: number) {
   if (loan.closed || loan.start_month > month) return 0;
+  if (loan.principal == null) return Number(loan.emi);
   return Math.max(0, Math.min(Number(loan.emi), Number(loan.principal) - recoveredBefore));
 }
 

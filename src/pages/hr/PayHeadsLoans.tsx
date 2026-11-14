@@ -168,10 +168,16 @@ function HeadAmounts({ head, onClose }: { head: CustomComponent | null; onClose:
 /* ───────────────────────── Loans & advances ───────────────────────── */
 
 type LoanRow = Loan & { recovered: number; employee: string; code: string };
-type Draft = { id?: string; employee_id: string; name: string; principal: string; emi: string; start_month: string; note: string };
-const blankDraft = (): Draft => ({ employee_id: "", name: "Loan", principal: "", emi: "", start_month: firstOfMonth(), note: "" });
+type Draft = { id?: string; employee_id: string; name: string; mode: "ongoing" | "total"; principal: string; emi: string; start_month: string; note: string };
+const blankDraft = (): Draft => ({ employee_id: "", name: "Loan", mode: "ongoing", principal: "", emi: "", start_month: firstOfMonth(), note: "" });
 
-/** Loans / advances (karj): the EMI is deducted automatically in payroll until the balance is recovered. */
+/** A loan with a total stops when repaid; without one ("ongoing") it repeats every month until stopped or removed. */
+const isRepaid = (l: LoanRow) => l.principal != null && l.recovered >= Number(l.principal);
+
+/**
+ * Loans / advances: a fixed amount deducted automatically in every payroll from the start month,
+ * until the admin stops or removes it — or, if a total is set, until the total is recovered.
+ */
 export function Loans() {
   const { firm } = useAuth();
   const { employees } = useEmployees(true);
@@ -195,88 +201,95 @@ export function Loans() {
   useEffect(() => { load(); }, [load]);
 
   const shown = useMemo(() => (rows ?? []).filter((l) => {
-    const done = l.closed || l.recovered >= Number(l.principal);
+    const done = l.closed || isRepaid(l);
     return filter === "all" || (filter === "closed" ? done : !done);
   }), [rows, filter]);
-  const outstanding = (rows ?? []).filter((l) => !l.closed).reduce((t, l) => t + Math.max(0, Number(l.principal) - l.recovered), 0);
-  const monthlyEmi = (rows ?? []).filter((l) => !l.closed && l.recovered < Number(l.principal)).reduce((t, l) => t + Math.min(Number(l.emi), Number(l.principal) - l.recovered), 0);
+  const active = (rows ?? []).filter((l) => !l.closed && !isRepaid(l));
+  const outstanding = active.filter((l) => l.principal != null).reduce((t, l) => t + Math.max(0, Number(l.principal) - l.recovered), 0);
+  const monthly = active.reduce((t, l) => t + (l.principal == null ? Number(l.emi) : Math.min(Number(l.emi), Number(l.principal) - l.recovered)), 0);
 
   async function save(e: FormEvent) {
     e.preventDefault();
     const d = draft!;
-    const principal = Number(d.principal), emi = Number(d.emi);
+    const emi = Number(d.emi);
+    const principal = d.mode === "total" ? Number(d.principal) : null;
     if (!d.employee_id) return toast("error", "Choose the employee.");
-    if (!(principal > 0) || !(emi > 0)) return toast("error", "Enter the loan amount and monthly deduction.");
-    if (emi > principal) return toast("error", "Monthly deduction can't be more than the loan amount.");
+    if (!(emi > 0)) return toast("error", "Enter the amount to deduct every month.");
+    if (principal != null && !(principal > 0)) return toast("error", "Enter the total loan amount, or choose 'Every month until I stop it'.");
+    if (principal != null && emi > principal) return toast("error", "Monthly deduction can't be more than the total amount.");
     setBusy(true);
     const payload = { firm_id: firm!.id, employee_id: d.employee_id, name: d.name.trim() || "Loan", principal, emi, start_month: d.start_month.slice(0, 7) + "-01", note: d.note.trim() || null };
     const { error } = d.id ? await supabase.from("loans").update(payload).eq("id", d.id) : await supabase.from("loans").insert(payload);
     setBusy(false);
     if (error) return toast("error", error.message);
-    toast("ok", d.id ? "Loan updated" : `Loan added. ${money(emi)} will be deducted every month from ${monthLabel(payload.start_month)}.`);
+    toast("ok", d.id ? "Loan updated" : principal == null
+      ? `${money(emi)} will be deducted every month from ${monthLabel(payload.start_month)} until you stop it.`
+      : `${money(emi)} will be deducted every month from ${monthLabel(payload.start_month)} until ${money(principal)} is recovered.`);
     setDraft(null); load();
   }
 
-  async function setClosed(l: LoanRow, closed: boolean) {
+  async function setStopped(l: LoanRow, closed: boolean) {
     const { error } = await supabase.from("loans").update({ closed }).eq("id", l.id);
     if (error) return toast("error", error.message);
-    toast("ok", closed ? "Loan closed. No more deductions." : "Loan reopened"); load();
+    toast("ok", closed ? `${l.name} stopped. No more deductions from the next payroll.` : `${l.name} resumed.`); load();
   }
 
   async function remove(l: LoanRow) {
-    if (l.recovered > 0) return toast("error", "This loan already has recoveries on payslips. Close it instead of deleting.");
+    if (l.recovered > 0) return toast("error", "This loan was already deducted on payslips. Stop it instead of removing, so past payslips stay correct.");
     const { error } = await supabase.from("loans").delete().eq("id", l.id);
     if (error) return toast("error", error.message);
-    toast("ok", "Loan deleted"); load();
+    toast("ok", `${l.name} removed`); load();
   }
 
-  const months = draft && Number(draft.principal) > 0 && Number(draft.emi) > 0 ? Math.ceil(Number(draft.principal) / Number(draft.emi)) : null;
+  const months = draft?.mode === "total" && Number(draft.principal) > 0 && Number(draft.emi) > 0 ? Math.ceil(Number(draft.principal) / Number(draft.emi)) : null;
 
   return (
     <Card title="Loans & advances"
-      description="Karj, salary advances or any amount to recover in instalments. The monthly deduction is taken automatically in payroll until the balance is zero."
+      description="Add a monthly deduction for a loan or salary advance. It is deducted automatically in every payroll from the start month until you stop or remove it (or until the total is repaid, if you set one)."
       action={<Button icon={<Plus className="size-4" />} onClick={() => setDraft(blankDraft())}>Add loan</Button>}>
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <div className="rounded-lg bg-canvas p-3"><div className="text-[12px] text-ink-3">Outstanding</div><div className="num font-display text-[20px] font-medium">{money(outstanding)}</div></div>
-        <div className="rounded-lg bg-canvas p-3"><div className="text-[12px] text-ink-3">Deducted per month</div><div className="num font-display text-[20px] font-medium">{money(monthlyEmi)}</div></div>
+        <div className="rounded-lg bg-canvas p-3"><div className="text-[12px] text-ink-3">Deducted per month</div><div className="num font-display text-[20px] font-medium">{money(monthly)}</div></div>
+        <div className="rounded-lg bg-canvas p-3"><div className="text-[12px] text-ink-3">Outstanding (loans with a total)</div><div className="num font-display text-[20px] font-medium">{money(outstanding)}</div></div>
         <div className="col-span-2 flex items-center gap-2 sm:col-span-1 sm:justify-end">
           <select aria-label="Filter loans" className="input h-9 w-auto" value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)}>
-            <option value="active">Active</option><option value="closed">Closed / repaid</option><option value="all">All</option>
+            <option value="active">Active</option><option value="closed">Stopped / repaid</option><option value="all">All</option>
           </select>
         </div>
       </div>
 
       {rows === null ? <Skeleton className="h-40" /> : shown.length === 0 ? (
-        <Empty icon={<HandCoins className="size-6" />} title={filter === "active" ? "No active loans" : "Nothing here"} body="Add a loan or advance to start deducting it from salary." />
+        <Empty icon={<HandCoins className="size-6" />} title={filter === "active" ? "No active loans" : "Nothing here"} body="Add a loan or advance to start deducting it from salary every month." />
       ) : (
         <div className="overflow-x-auto rounded-xl border border-line">
-          <table className="w-full min-w-[760px]">
+          <table className="w-full min-w-[780px]">
             <thead><tr>
-              <th className="th">Employee</th><th className="th">Name</th><th className="th text-right">Amount</th><th className="th text-right">Monthly</th>
-              <th className="th">From</th><th className="th">Recovered</th><th className="th text-right">Balance</th><th className="th w-24" />
+              <th className="th">Employee</th><th className="th">Name</th><th className="th text-right">Per month</th><th className="th">From</th>
+              <th className="th text-right">Total</th><th className="th">Deducted so far</th><th className="th text-right">Status</th><th className="th w-28" />
             </tr></thead>
             <tbody>
               {shown.map((l) => {
-                const balance = Math.max(0, Number(l.principal) - l.recovered);
-                const pct = Math.min(100, (l.recovered / Number(l.principal)) * 100);
-                const done = l.closed || balance === 0;
+                const total = l.principal == null ? null : Number(l.principal);
+                const balance = total == null ? null : Math.max(0, total - l.recovered);
+                const pct = total ? Math.min(100, (l.recovered / total) * 100) : null;
+                const repaid = isRepaid(l);
                 return (
-                  <tr key={l.id} className={cx(done && "opacity-60")}>
+                  <tr key={l.id} className={cx((l.closed || repaid) && "opacity-60")}>
                     <td className="td"><div className="font-medium">{l.employee}</div><div className="text-[12px] text-ink-3">{l.code}</div></td>
                     <td className="td">{l.name}{l.note && <div className="text-[12px] text-ink-3">{l.note}</div>}</td>
-                    <td className="td num text-right">{money(Number(l.principal))}</td>
-                    <td className="td num text-right">{money(Number(l.emi))}</td>
+                    <td className="td num text-right font-medium">{money(Number(l.emi))}</td>
                     <td className="td whitespace-nowrap text-ink-2">{monthLabel(l.start_month)}</td>
-                    <td className="td min-w-[120px]">
-                      <div className="h-1.5 overflow-hidden rounded-full bg-wine-50"><div className="h-full rounded-full bg-wine-600" style={{ width: `${pct}%` }} /></div>
-                      <div className="num mt-1 text-[12px] text-ink-3">{money(l.recovered)}</div>
+                    <td className="td num text-right">{total == null ? <span className="text-ink-3">Until stopped</span> : money(total)}</td>
+                    <td className="td min-w-[130px]">
+                      {pct != null && <div className="h-1.5 overflow-hidden rounded-full bg-wine-50"><div className="h-full rounded-full bg-wine-600" style={{ width: `${pct}%` }} /></div>}
+                      <div className="num mt-1 text-[12px] text-ink-3">{money(l.recovered)}{balance != null && balance > 0 ? ` · ${money(balance)} left` : ""}</div>
                     </td>
-                    <td className="td num text-right font-semibold">{balance === 0 ? <Badge tone="ok">Repaid</Badge> : l.closed ? <Badge>Closed</Badge> : money(balance)}</td>
-                    <td className="td"><div className="flex justify-end">
-                      <IconButton label="Edit loan" onClick={() => setDraft({ id: l.id, employee_id: l.employee_id, name: l.name, principal: String(l.principal), emi: String(l.emi), start_month: l.start_month, note: l.note ?? "" })}><Pencil className="size-4" /></IconButton>
-                      {l.recovered > 0
-                        ? <Button size="sm" variant="ghost" onClick={() => setClosed(l, !l.closed)}>{l.closed ? "Reopen" : "Close"}</Button>
-                        : <IconButton label="Delete loan" className="hover:text-bad" onClick={() => remove(l)}><Trash2 className="size-4" /></IconButton>}
+                    <td className="td text-right">
+                      {repaid ? <Badge tone="ok">Repaid</Badge> : l.closed ? <Badge>Stopped</Badge> : <Badge tone="wine" dot>Active</Badge>}
+                    </td>
+                    <td className="td"><div className="flex items-center justify-end gap-1">
+                      <IconButton label="Edit loan" onClick={() => setDraft({ id: l.id, employee_id: l.employee_id, name: l.name, mode: l.principal == null ? "ongoing" : "total", principal: l.principal == null ? "" : String(l.principal), emi: String(l.emi), start_month: l.start_month, note: l.note ?? "" })}><Pencil className="size-4" /></IconButton>
+                      {!repaid && <Button size="sm" variant="ghost" onClick={() => setStopped(l, !l.closed)}>{l.closed ? "Resume" : "Stop"}</Button>}
+                      {l.recovered === 0 && <IconButton label="Remove loan" className="hover:text-bad" onClick={() => remove(l)}><Trash2 className="size-4" /></IconButton>}
                     </div></td>
                   </tr>
                 );
@@ -287,7 +300,7 @@ export function Loans() {
       )}
 
       <Modal open={!!draft} onClose={() => setDraft(null)} title={draft?.id ? "Edit loan" : "Add loan / advance"}
-        description="The monthly amount is deducted in each payroll from the start month until the full amount is recovered."
+        description="The monthly amount is deducted automatically in every payroll from the start month."
         footer={<><Button variant="secondary" onClick={() => setDraft(null)}>Cancel</Button><Button type="submit" form="loan" loading={busy}>{draft?.id ? "Save" : "Add loan"}</Button></>}>
         {draft && (
           <form id="loan" onSubmit={save} className="space-y-4">
@@ -297,23 +310,39 @@ export function Loans() {
                 {(employees ?? []).map((e) => <option key={e.id} value={e.id}>{e.full_name} ({e.emp_code})</option>)}
               </select>
             </Field>
-            <Field label="Name *" hint="Shown on the payslip and as a column in the salary register, e.g. Loan, Karj, Salary Advance.">
+            <Field label="Name *" hint="Shown on the payslip and as a column in the salary register.">
               <input className="input" required maxLength={60} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} list="loan-names" />
-              <datalist id="loan-names">{["Loan", "Karj", "Salary Advance", "Festival Advance"].map((n) => <option key={n} value={n} />)}</datalist>
+              <datalist id="loan-names">{["Loan", "Salary Advance", "Festival Advance", "Vehicle Loan", "Society Loan"].map((n) => <option key={n} value={n} />)}</datalist>
             </Field>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Total amount (₹) *"><input className="input num" type="number" min={1} step="1" required value={draft.principal} onChange={(e) => setDraft({ ...draft, principal: e.target.value })} /></Field>
-              <Field label="Deduct per month (₹) *" hint="Same as total for a one-time deduction"><input className="input num" type="number" min={1} step="1" required value={draft.emi} onChange={(e) => setDraft({ ...draft, emi: e.target.value })} /></Field>
+              <Field label="Deduct every month (₹) *"><input className="input num" type="number" min={1} step="1" required value={draft.emi} onChange={(e) => setDraft({ ...draft, emi: e.target.value })} placeholder="3000" /></Field>
+              <Field label="Start from month *">
+                <input className="input" type="month" required value={draft.start_month.slice(0, 7)} onChange={(e) => setDraft({ ...draft, start_month: `${e.target.value}-01` })} />
+              </Field>
             </div>
-            <Field label="Start deducting from">
-              <input className="input" type="month" required value={draft.start_month.slice(0, 7)} onChange={(e) => setDraft({ ...draft, start_month: `${e.target.value}-01` })} />
-            </Field>
+            <fieldset>
+              <legend className="label">How long to deduct</legend>
+              <div className="grid gap-2 sm:grid-cols-2" role="radiogroup">
+                {([["ongoing", "Every month until I stop it", "Keeps deducting until you click Stop or remove it."],
+                  ["total", "Until a total amount is repaid", "Stops by itself when the total is recovered."]] as const).map(([v, t, d]) => (
+                  <button key={v} type="button" role="radio" aria-checked={draft.mode === v} onClick={() => setDraft({ ...draft, mode: v })}
+                    className={cx("rounded-xl p-3 text-left ring-1 transition-all cursor-pointer", draft.mode === v ? "bg-wine-50 ring-2 ring-wine-600" : "bg-white ring-line hover:ring-ink-4")}>
+                    <div className="text-[14px] font-medium">{t}</div><div className="mt-0.5 text-[12px] text-ink-3">{d}</div>
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            {draft.mode === "total" && (
+              <Field label="Total amount (₹) *" hint="Same as the monthly amount for a one-time deduction.">
+                <input className="input num" type="number" min={1} step="1" required value={draft.principal} onChange={(e) => setDraft({ ...draft, principal: e.target.value })} />
+              </Field>
+            )}
             <Field label="Note"><input className="input" value={draft.note} maxLength={120} onChange={(e) => setDraft({ ...draft, note: e.target.value })} placeholder="Optional, e.g. sanction no." /></Field>
-            {months && <p className="rounded-lg bg-wine-50 px-3 py-2 text-[13px] text-wine-800">About <b>{months} month{months === 1 ? "" : "s"}</b> to recover{months > 1 ? `; the last month deducts only what is left` : ""}.</p>}
+            {draft.mode === "ongoing" && Number(draft.emi) > 0 && <p className="rounded-lg bg-wine-50 px-3 py-2 text-[13px] text-wine-800"><b>{money(Number(draft.emi))}</b> will be deducted every month from <b>{monthLabel(draft.start_month)}</b> until you stop it.</p>}
+            {months && <p className="rounded-lg bg-wine-50 px-3 py-2 text-[13px] text-wine-800">About <b>{months} month{months === 1 ? "" : "s"}</b> to recover{months > 1 ? "; the last month deducts only what is left" : ""}.</p>}
           </form>
         )}
       </Modal>
     </Card>
   );
 }
-
