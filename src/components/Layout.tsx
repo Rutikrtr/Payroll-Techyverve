@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { Building, Building2, CalendarCheck, FileText, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Settings, Users, X } from "lucide-react";
+import { Building, Building2, CalendarCheck, FileText, LayoutDashboard, Lightbulb, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Settings, Users, X } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { cx, IconButton, Skeleton } from "./ui";
 import { initials } from "../lib/format";
@@ -13,6 +13,7 @@ const adminNav: Item[] = [
 ];
 const hrNav: Item[] = [
   { to: "/app", label: "Dashboard", icon: <LayoutDashboard className="size-[18px]" />, end: true },
+  { to: "/app/live", label: "Live office", icon: <Lightbulb className="size-[18px]" /> },
   { to: "/app/attendance", label: "Attendance", icon: <CalendarCheck className="size-[18px]" /> },
   { to: "/app/employees", label: "Employees", icon: <Users className="size-[18px]" /> },
   { to: "/app/branches", label: "Branches", icon: <Building className="size-[18px]" />, multiOnly: true },
@@ -65,7 +66,7 @@ export default function Layout() {
   useEffect(() => {
     const t = setTimeout(() => {
       if (profile?.role === "superadmin") { import("../pages/admin/Overview"); import("../pages/admin/Firms"); import("../pages/admin/FirmDetail"); }
-      else { import("../pages/hr/Dashboard"); import("../pages/hr/Attendance"); import("../pages/hr/Employees"); import("../pages/hr/Branches"); import("../pages/hr/Payroll"); import("../pages/hr/Settings"); }
+      else { import("../pages/hr/Dashboard"); import("../pages/hr/LiveOffice"); import("../pages/hr/Attendance"); import("../pages/hr/Employees"); import("../pages/hr/Branches"); import("../pages/hr/Payroll"); import("../pages/hr/Settings"); }
     }, 300);
     return () => clearTimeout(t);
   }, [profile?.role]);

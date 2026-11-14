@@ -20,6 +20,7 @@ const HrDashboard = lazy(() => import("./pages/hr/Dashboard"));
 const HrAttendance = lazy(() => import("./pages/hr/Attendance"));
 const HrEmployees = lazy(() => import("./pages/hr/Employees"));
 const HrBranches = lazy(() => import("./pages/hr/Branches"));
+const HrLiveOffice = lazy(() => import("./pages/hr/LiveOffice"));
 const HrEmployeeProfile = lazy(() => import("./pages/hr/EmployeeProfile"));
 const HrPayroll = lazy(() => import("./pages/hr/Payroll"));
 const HrSettings = lazy(() => import("./pages/hr/Settings"));
@@ -79,6 +80,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                 <Route path="/app/employees" element={<HrEmployees />} />
                 <Route path="/app/employees/:id" element={<HrEmployeeProfile />} />
                 <Route path="/app/branches" element={<HrBranches />} />
+                <Route path="/app/live" element={<HrLiveOffice />} />
                 <Route path="/app/payroll" element={<HrPayroll />} />
                 <Route path="/app/settings" element={<HrSettings />} />
               </Route>

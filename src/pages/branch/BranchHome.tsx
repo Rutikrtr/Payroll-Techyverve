@@ -73,11 +73,11 @@ function BranchDashboard() {
     setError(""); setStale(false); setData(data as Overview); setUpdatedAt(new Date());
   }, [date]);
 
-  // Live: poll every 15s, and refresh the moment the screen wakes or the tab comes back,
+  // Live: poll every 30s while the screen is on (never when hidden), and refresh the moment it wakes,
   // since browsers pause timers on hidden tabs and sleeping kiosk tablets.
   useEffect(() => {
     load();
-    const i = setInterval(load, 15_000);
+    const i = setInterval(() => { if (document.visibilityState === "visible") load(); }, 30_000);
     const wake = () => { if (document.visibilityState === "visible") load(); };
     document.addEventListener("visibilitychange", wake);
     window.addEventListener("focus", wake);
