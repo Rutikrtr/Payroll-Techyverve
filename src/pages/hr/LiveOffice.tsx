@@ -144,9 +144,9 @@ function Plant({ x, y, s = 1 }: { x: number; y: number; s?: number }) {
 type HoverFn = (e: Emp | null, ev?: React.MouseEvent) => void;
 
 /** The isometric room as an <svg>; with `box` it renders as a nested room inside a larger SVG (campus view). */
-function FloorScene({ title, staff, att, lightsOn, focus, onPick, onHover, box }: {
+function FloorScene({ title, staff, att, lightsOn, focus, onPick, onHover, box, compact }: {
   title: string; staff: Emp[]; att: Map<string, Att>; lightsOn: boolean; focus: string | null; onPick: (id: string) => void;
-  onHover?: HoverFn; box?: { x: number; y: number; width: number; height: number };
+  onHover?: HoverFn; box?: { x: number; y: number; width: number; height: number }; compact?: boolean;
 }) {
   const n = Math.max(staff.length, 1);
   const perRow = Math.max(3, Math.min(7, Math.ceil(Math.sqrt(n * 1.3))));
@@ -157,7 +157,8 @@ function FloorScene({ title, staff, att, lightsOn, focus, onPick, onHover, box }
   };
   const workW = 1.1 + perRow * 1.6 + 0.3;
   const workD = deskPos((rows - 1) * perRow).y + 2.2;
-  const RW = workW + 4.6, RD = Math.max(workD, 8.6), WALL = 2.6;
+  // Compact (small branch cards): shallower room and no lounge, so a few desks fill the card instead of empty floor.
+  const RW = workW + 4.6, RD = Math.max(workD, compact ? 5 : 8.6), WALL = 2.6;
 
   const corners = [P(0, 0, WALL), P(RW, 0, WALL), P(0, RD, WALL), P(RW, RD, 0), P(0, RD, 0), P(RW, 0, 0)];
   const minX = Math.min(...corners.map((c) => c[0])) - 16, maxX = Math.max(...corners.map((c) => c[0])) + 16;
@@ -213,9 +214,9 @@ function FloorScene({ title, staff, att, lightsOn, focus, onPick, onHover, box }
         {(() => { const [tx, ty] = P(mx + 1.8, my + 3.2, 1.6); return <text x={tx} y={ty} textAnchor="middle" fontSize={8} fontWeight={600} fill="#55708a">Meeting room</text>; })()}
 
         {/* lounge */}
-        <Box x={lx} y={ly} w={2.6} d={0.7} h={0.45} top="#9fb3c8" left="#869bb1" right="#7a8fa5" />
+        {!compact && <><Box x={lx} y={ly} w={2.6} d={0.7} h={0.45} top="#9fb3c8" left="#869bb1" right="#7a8fa5" />
         <Box x={lx} y={ly} z={0.45} w={2.6} d={0.22} h={0.45} top="#a9bccf" left="#8ea3b8" right="#8297ac" />
-        <Box x={lx + 0.8} y={ly + 1.2} w={1} d={0.6} h={0.3} top="#d9c2a0" left="#c3aa86" right="#b59c78" />
+        <Box x={lx + 0.8} y={ly + 1.2} w={1} d={0.6} h={0.3} top="#d9c2a0" left="#c3aa86" right="#b59c78" /></>}
         <Plant x={RW - 0.8} y={RD - 0.9} s={1.1} />
         <Plant x={0.3} y={RD - 0.8} />
         <Plant x={workW - 0.5} y={0.35} s={0.9} />
@@ -343,45 +344,92 @@ function Campus({ firmName, logo, main, others, att, onHover }: {
     mainF = [10, 10, W - 20, mh];
     frames = others.map((_, i) => [34, 10 + mh + 34 + i * (bh + 26), W - 44, bh]);
     H = (frames.length ? frames[frames.length - 1][1] + bh : mainF[1] + mh) + 12;
+  } else if (others.length === 0) {
+    W = 760; H = 500; mainF = [10, 10, 740, 480]; frames = [];
   } else {
-    const perSide = Math.max(1, Math.ceil(others.length / 2));
-    const sideW = 330, gap = 22;
-    const sideH = Math.min(270, Math.max(190, (720 - (perSide - 1) * gap) / perSide));
-    H = Math.max(500, perSide * sideH + (perSide - 1) * gap + 40);
-    W = others.length ? 1400 : 760;
-    const mw = others.length ? 560 : 740, mh = Math.min(H - 40, 470);
-    mainF = [(W - mw) / 2, (H - mh) / 2, mw, mh];
-    frames = others.map((_, i) => {
-      const side = i % 2, row = Math.floor(i / 2);
-      const count = side === 0 ? Math.ceil(others.length / 2) : Math.floor(others.length / 2);
-      const top = (H - (count * sideH + (count - 1) * gap)) / 2;
-      return [side === 0 ? 20 : W - 20 - sideW, top + row * (sideH + gap), sideW, sideH];
-    });
+    // Grid of equal cells with the HQ room taking the centre 2×2 block. The column count (4/6/8) is chosen so the
+    // whole grid stays close to a wide screen shape however many branches there are; branches fill the cells
+    // nearest to HQ first, going round it.
+    const n = others.length, gap = 22;
+    W = 1400;
+    // HQ spans the 2 centre columns and 2 rows (even row count) or 3 rows (odd), so it is always dead centre.
+    const hqRowsFor = (r: number) => (r % 2 && r >= 3 ? 3 : 2);
+    let C = 4, R = 2, best = Infinity;
+    for (const c of [4, 6, 8]) for (let r = 2; r <= 9; r++) {
+      const cap = c * r - 2 * hqRowsFor(r);
+      if (cap < n) continue;
+      const cw = (W - (c + 1) * gap) / c, h = r * cw * 0.72 + (r + 1) * gap;
+      const score = Math.abs(W / h - 2.1) + (cap - n) * 0.12;
+      if (score < best) { best = score; C = c; R = r; }
+      break; // more rows than needed only adds empty cells
+    }
+    const cw = (W - (C + 1) * gap) / C, ch = cw * 0.72;
+    H = R * ch + (R + 1) * gap;
+    const hqRows = hqRowsFor(R);
+    const hc = C / 2 - 1, hr = Math.floor((R - hqRows) / 2);
+    const cell = (c: number, r: number) => [gap + c * (cw + gap), gap + r * (ch + gap), cw, ch];
+    mainF = [gap + hc * (cw + gap), gap + hr * (ch + gap), 2 * cw + gap, hqRows * ch + (hqRows - 1) * gap];
+    const hcx = mainF[0] + mainF[2] / 2, hcy = mainF[1] + mainF[3] / 2;
+    const free: { c: number; r: number; d: number; a: number }[] = [];
+    for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
+      if (c >= hc && c <= hc + 1 && r >= hr && r < hr + hqRows) continue;
+      const [x, y] = cell(c, r); const dx = x + cw / 2 - hcx, dy = (y + ch / 2 - hcy) * 1.6;
+      free.push({ c, r, d: Math.round(Math.hypot(dx, dy) / 10), a: Math.atan2(dy, dx) });
+    }
+    free.sort((p, q) => p.d - q.d || p.a - q.a);
+    frames = others.map((_, i) => cell(free[i].c, free[i].r));
   }
 
+  /** Where the line from a rectangle's centre towards (tx, ty) leaves the rectangle. */
+  const edge = (f: number[], tx: number, ty: number) => {
+    const [x, y, w, h] = f; const cx0 = x + w / 2, cy0 = y + h / 2; const dx = tx - cx0, dy = ty - cy0;
+    const k = Math.min(Math.abs((w / 2) / (dx || 1e-6)), Math.abs((h / 2) / (dy || 1e-6)));
+    return [cx0 + dx * k, cy0 + dy * k];
+  };
+
   const roomFrame = (r: Room, f: number[], isMain = false) => {
-    const [x, y, w, h] = f; const n = inCount(r); const on = n > 0; 
+    const [x, y, w, h] = f; const n = inCount(r); const on = n > 0;
+    // Header and text scale with the card so small branch cards stay tidy.
+    const hh = isMain ? HEAD : Math.max(30, Math.min(40, Math.round(h * 0.17)));
+    const fs = isMain ? 1 : hh / 40;
+    const nameMax = Math.max(8, Math.floor((w - 96 * fs) / (7.4 * fs)));
     const title = (() => { const t = `${firmName} · ${r.name}`; const max = Math.floor((w - 150) / 7); return t.length > max ? `${t.slice(0, max - 1)}…` : t; })();
+    const rad = isMain ? 16 : 12;
     return (
       <g key={r.id}>
-        {on && <rect x={x - 5} y={y - 5} width={w + 10} height={h + 10} rx={20} fill={isMain ? "#a3305a" : "#10b981"} opacity={0.14} className={motion ? "cp-glow" : undefined} />}
-        <rect x={x} y={y} width={w} height={h} rx={16} fill={on ? "#fbf8f3" : "#f5f6f8"} stroke={isMain ? "#d9c3cc" : "#e6e1da"} strokeWidth={1}
-          style={{ filter: "drop-shadow(0 8px 18px rgba(20,6,12,.08))" }} />
+        {on && <rect x={x - 4} y={y - 4} width={w + 8} height={h + 8} rx={rad + 4} fill={isMain ? "#a3305a" : "#10b981"} opacity={0.14} className={motion ? "cp-glow" : undefined} />}
+        <rect x={x} y={y} width={w} height={h} rx={rad} fill={on ? "#fbf8f3" : "#f7f7f9"} stroke={on ? (isMain ? "#d9b3c3" : "#a7e3c9") : isMain ? "#d9c3cc" : "#e8e4de"} strokeWidth={1}
+          style={{ filter: "drop-shadow(0 6px 14px rgba(20,6,12,.07))" }} />
         <g>
-          <rect x={x} y={y} width={w} height={HEAD} rx={16} fill="#ffffff" />
-          <rect x={x} y={y + HEAD - 1} width={w} height={1} fill="#eee8e1" />
+          <rect x={x} y={y} width={w} height={hh} rx={rad} fill="#ffffff" />
+          <rect x={x} y={y + hh - 1} width={w} height={1} fill="#eee8e1" />
           {isMain && <rect x={x + 16} y={y} width={w - 32} height={4} rx={2} fill="#7a1f3f" />}
           {isMain && logo && <image href={logo} x={x + 12} y={y + 9} width={28} height={28} preserveAspectRatio="xMidYMid meet" />}
-          <text x={x + (isMain && logo ? 48 : 14)} y={y + (isMain ? 19 : 28)} fontSize={isMain ? 9.5 : 13} fontWeight={700} fill={isMain ? "#a3305a" : "#1a1216"} letterSpacing={isMain ? 0.8 : 0}>
-            {isMain ? "MAIN BRANCH · HQ" : (r.name.length > 26 ? `${r.name.slice(0, 25)}…` : r.name)}
-          </text>
-          {isMain && <text x={x + (logo ? 48 : 14)} y={y + 36} fontSize={13} fontWeight={700} fill="#1a1216">{title}</text>}
-          <circle cx={x + w - 78} cy={y + HEAD / 2} r={7} fill={on ? "#ffcf4d" : "#e5e7eb"} stroke={on ? "#f5a300" : "#cbd0d6"} />
-          {on && motion && <circle cx={x + w - 78} cy={y + HEAD / 2} r={7} fill="none" stroke="#ffcf4d" className="cp-ping" />}
-          <text x={x + w - 14} y={y + HEAD / 2 + 4} textAnchor="end" fontSize={12} fill="#6b6470"><tspan fontWeight={700} fill={on ? "#047857" : "#1a1216"}>{n}</tspan>/{r.staff.length} in</text>
+          {isMain ? (
+            <>
+              <text x={x + (logo ? 48 : 14)} y={y + 19} fontSize={9.5} fontWeight={700} fill="#a3305a" letterSpacing={0.8}>MAIN BRANCH · HQ</text>
+              <text x={x + (logo ? 48 : 14)} y={y + 36} fontSize={13} fontWeight={700} fill="#1a1216">{title}</text>
+            </>
+          ) : (
+            <>
+              <circle cx={x + 14 * fs} cy={y + hh / 2} r={4 * fs} fill={on ? "#10b981" : "#c9ccd2"} />
+              <text x={x + 24 * fs} y={y + hh / 2 + 4.5 * fs} fontSize={13 * fs} fontWeight={700} fill="#1a1216">{r.name.length > nameMax ? `${r.name.slice(0, nameMax - 1)}…` : r.name}</text>
+            </>
+          )}
+          <text x={x + w - 12 * fs} y={y + hh / 2 + 4 * fs} textAnchor="end" fontSize={12 * fs} fill="#6b6470"><tspan fontWeight={700} fill={on ? "#047857" : "#1a1216"}>{n}</tspan>/{r.staff.length}</text>
+          <circle cx={x + w - (isMain ? 70 : 52 * fs)} cy={y + hh / 2} r={6.5 * fs} fill={on ? "#ffcf4d" : "#e5e7eb"} stroke={on ? "#f5a300" : "#cbd0d6"} />
+          {on && motion && <circle cx={x + w - (isMain ? 70 : 52 * fs)} cy={y + hh / 2} r={6.5 * fs} fill="none" stroke="#ffcf4d" className="cp-ping" />}
         </g>
-        <FloorScene title={isMain ? firmName : r.name} staff={r.staff} att={att} lightsOn={on} focus={null} onPick={() => {}} onHover={onHover}
-          box={{ x: x + 6, y: y + HEAD + 4, width: w - 12, height: h - HEAD - 10 }} />
+        {r.staff.length === 0 ? (
+          <g>
+            <rect x={x + w / 2 - 15} y={y + hh + (h - hh) / 2 - 26} width={30} height={22} rx={4} fill="none" stroke="#c9ccd2" strokeWidth={1.5} />
+            <path d={`M${x + w / 2 - 15},${y + hh + (h - hh) / 2 - 18} h30 M${x + w / 2},${y + hh + (h - hh) / 2 - 26} v-6`} stroke="#c9ccd2" strokeWidth={1.5} />
+            <text x={x + w / 2} y={y + hh + (h - hh) / 2 + 14} textAnchor="middle" fontSize={11.5 * fs} fill="#8a8590">No staff assigned yet</text>
+          </g>
+        ) : (
+          <FloorScene title={isMain ? firmName : r.name} staff={r.staff} att={att} lightsOn={on} focus={null} onPick={() => {}} onHover={onHover} compact={!isMain}
+            box={{ x: x + 4, y: y + hh + 2, width: w - 8, height: h - hh - 6 }} />
+        )}
       </g>
     );
   };
@@ -406,11 +454,11 @@ function Campus({ firmName, logo, main, others, att, onHover }: {
           if (narrow) {
             d = `M22,${mainF[1] + mainF[3] - 20} L22,${ay - 12} Q22,${ay} 34,${ay}`;
           } else {
-            const left = fx < mainF[0];
-            const ax = left ? fx + fw : fx;
-            const mx0 = left ? mainF[0] : mainF[0] + mainF[2], my0 = mainF[1] + mainF[3] / 2;
-            const midX = (mx0 + ax) / 2;
-            d = `M${mx0},${my0} C${midX},${my0} ${midX},${ay} ${ax},${ay}`;
+            const bcx = fx + fw / 2, bcy = fy + fh / 2, hcx = mainF[0] + mainF[2] / 2, hcy = mainF[1] + mainF[3] / 2;
+            const [x0, y0] = edge(mainF, bcx, bcy), [x1, y1] = edge(frames[i], hcx, hcy);
+            // Gentle bow so neighbouring links don't sit on top of each other.
+            const bow = 0.12, qx = (x0 + x1) / 2 - (y1 - y0) * bow, qy = (y0 + y1) / 2 + (x1 - x0) * bow;
+            d = `M${x0.toFixed(1)},${y0.toFixed(1)} Q${qx.toFixed(1)},${qy.toFixed(1)} ${x1.toFixed(1)},${y1.toFixed(1)}`;
           }
           const id = `cp-path-${i}`;
           return (
