@@ -12,6 +12,7 @@ import { monthlyGross } from "../../lib/payroll";
 type Draft = Partial<Employee>;
 const blank: Draft = {
   emp_code: "", full_name: "", email: "", phone: "", designation: "", department: "", date_of_joining: "", date_of_exit: "",
+  gender: "", date_of_birth: "", address: "", qualification: "", work_type: "",
   pan: "", uan: "", esi_number: "", bank_name: "", bank_account: "", ifsc: "",
   basic: 0, hra: 0, conveyance: 0, special_allowance: 0, other_allowance: 0, pf_applicable: true, esi_applicable: true, status: "active",
 };
@@ -56,7 +57,9 @@ export default function Employees() {
   function openNew() {
     // Employee IDs are permanent and never reused, so continue after the highest one ever issued.
     const nextNo = Math.max(0, ...(employees ?? []).map((e) => Number(e.emp_code.replace(/[^0-9]/g, "")) || 0)) + 1;
-    setDraft({ ...blank, emp_code: `EMP${String(nextNo).padStart(3, "0")}` });
+    // Keep the firm's own code style (e.g. BKN036), falling back to EMP.
+    const prefix = (employees ?? []).find((e) => /^[A-Za-z]+[0-9]+$/.test(e.emp_code))?.emp_code.replace(/[0-9]+$/, "") || "EMP";
+    setDraft({ ...blank, emp_code: `${prefix}${String(nextNo).padStart(3, "0")}` });
   }
 
   const set = (k: keyof Employee) => ({
@@ -144,6 +147,12 @@ export default function Employees() {
               <Field label="Employee ID *" hint={draft.id ? "Permanent. It can never be changed." : "Permanent once saved."}><input className="input uppercase" required disabled={!!draft.id} {...set("emp_code")} /></Field>
               <Field label="Email"><input className="input" type="email" {...set("email")} /></Field>
               <Field label="Phone"><input className="input" type="tel" {...set("phone")} /></Field>
+              <Field label="Gender">
+                <select className="input" {...set("gender")}><option value="">—</option><option value="M">Male</option><option value="F">Female</option><option value="O">Other</option></select>
+              </Field>
+              <Field label="Date of birth"><input className="input" type="date" {...set("date_of_birth")} /></Field>
+              <Field label="Qualification"><input className="input" {...set("qualification")} /></Field>
+              <Field label="Address"><input className="input" {...set("address")} /></Field>
             </Group>
             <Group title="Job">
               <Field label="Designation"><input className="input" {...set("designation")} /></Field>
@@ -152,6 +161,9 @@ export default function Employees() {
               </Field>
               <Field label="Date of joining"><input className="input" type="date" {...set("date_of_joining")} /></Field>
               <Field label="Date of exit" hint="Leave empty if still employed"><input className="input" type="date" {...set("date_of_exit")} /></Field>
+              <Field label="Work type">
+                <select className="input" {...set("work_type")}><option value="">—</option><option value="permanent">Permanent</option><option value="temporary">Temporary</option></select>
+              </Field>
               {multi && (
                 <Field label="Branch *" hint={lockedBranch ? "To change branch, use Transfer on the employee's page" : branches.length ? "Employee checks in with this branch's QR" : "Create a branch first under Branches"}>
                   <select className="input" required disabled={lockedBranch} value={draft.branch_id ?? ""} onChange={(e) => setDraft({ ...draft, branch_id: e.target.value || null })}>

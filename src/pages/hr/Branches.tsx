@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
-import { Building, KeyRound, LocateFixed, MapPin, Plus, Printer, QrCode as QrIcon, Trash2, Users } from "lucide-react";
+import { Building, KeyRound, LocateFixed, MapPin, Pencil, Plus, Printer, QrCode as QrIcon, Trash2, Users } from "lucide-react";
 import { firmUsers, supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import type { Branch } from "../../lib/types";
@@ -21,11 +21,12 @@ export default function Branches() {
   const [del, setDel] = useState<Row | null>(null);
   const [qr, setQr] = useState<{ branch: Row; token: string } | null>(null);
   const [geo, setGeo] = useState<Row | null>(null);
+  const [edit, setEdit] = useState<{ id: string; name: string; code: string; address: string; phone: string; opened_on: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function load() {
     const [{ data: b }, { data: p }, { data: e }, { data: a }] = await Promise.all([
-      supabase.from("branches").select("id, firm_id, name, address, created_at, lat, lng, radius_m").order("created_at"),
+      supabase.from("branches").select("id, firm_id, name, address, created_at, lat, lng, radius_m, code, phone, opened_on").order("created_at"),
       supabase.from("profiles").select("branch_id, login_id").eq("role", "branch"),
       supabase.from("employees").select("id, branch_id").eq("status", "active"),
       supabase.from("attendance").select("employee_id, check_in, check_out").eq("date", today()),
@@ -94,10 +95,14 @@ export default function Branches() {
               <section key={b.id} className="card flex flex-col p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <h2 className="truncate text-[17px] font-medium">{b.name}</h2>
+                    <h2 className="truncate text-[17px] font-medium">{b.code && <span className="mr-1.5 rounded bg-canvas px-1.5 py-0.5 font-mono text-[12px] text-ink-3">{b.code}</span>}{b.name}</h2>
                     <p className="mt-0.5 flex items-center gap-1 truncate text-[13px] text-ink-3"><MapPin className="size-3.5 shrink-0" />{b.address || "No address"}</p>
+                    {(b.phone || b.opened_on) && <p className="mt-0.5 truncate text-[12px] text-ink-4">{[b.phone && `Ph ${b.phone}`, b.opened_on && `Opened ${new Date(b.opened_on).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`].filter(Boolean).join(" · ")}</p>}
                   </div>
-                  {!single && <IconButton label={`Delete ${b.name}`} className="hover:text-bad" onClick={() => setDel(b)}><Trash2 className="size-4" /></IconButton>}
+                  <div className="flex shrink-0">
+                    <IconButton label={`Edit ${b.name}`} onClick={() => setEdit({ id: b.id, name: b.name, code: b.code ?? "", address: b.address ?? "", phone: b.phone ?? "", opened_on: b.opened_on ?? "" })}><Pencil className="size-4" /></IconButton>
+                    {!single && <IconButton label={`Delete ${b.name}`} className="hover:text-bad" onClick={() => setDel(b)}><Trash2 className="size-4" /></IconButton>}
+                  </div>
                 </div>
                 <div className="mt-4 grid grid-cols-3 gap-2 text-center">
                   {[["Staff", b.staff], ["Checked in", b.inToday], ["Checked out", b.outToday]].map(([k, v]) => (
@@ -154,6 +159,32 @@ export default function Branches() {
       </Modal>
 
       <BranchLocation branch={geo} onClose={() => setGeo(null)} onSaved={load} />
+
+      <Modal open={!!edit} onClose={() => setEdit(null)} title="Edit branch" description="Name, code and contact details. The kiosk login ID stays the same."
+        footer={<><Button variant="secondary" onClick={() => setEdit(null)}>Cancel</Button><Button type="submit" form="bedit" loading={busy}>Save</Button></>}>
+        {edit && (
+          <form id="bedit" className="space-y-4" onSubmit={async (e) => {
+            e.preventDefault(); setBusy(true);
+            const { error } = await supabase.from("branches").update({
+              name: edit.name.trim(), code: edit.code.trim() || null, address: edit.address.trim() || null,
+              phone: edit.phone.trim() || null, opened_on: edit.opened_on || null,
+            }).eq("id", edit.id);
+            setBusy(false);
+            if (error) return toast("error", error.code === "23505" ? "Another branch already uses this name or code" : error.message);
+            toast("ok", "Branch updated"); setEdit(null); load();
+          }}>
+            <div className="grid gap-4 sm:grid-cols-[1fr_110px]">
+              <Field label="Branch name *"><input className="input" required value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
+              <Field label="Code"><input className="input" value={edit.code} onChange={(e) => setEdit({ ...edit, code: e.target.value })} /></Field>
+            </div>
+            <Field label="Address"><input className="input" value={edit.address} onChange={(e) => setEdit({ ...edit, address: e.target.value })} /></Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Phone"><input className="input" type="tel" value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} /></Field>
+              <Field label="Opening date"><input className="input" type="date" value={edit.opened_on} onChange={(e) => setEdit({ ...edit, opened_on: e.target.value })} /></Field>
+            </div>
+          </form>
+        )}
+      </Modal>
 
       <Modal open={!!qr} onClose={() => setQr(null)} title={`${qr?.branch.name} · today's QR`} description="Valid until midnight. Employees scan it to check in, and again to check out."
         footer={<><Button variant="secondary" onClick={() => setQr(null)}>Close</Button><Button icon={<Printer className="size-4" />} onClick={() => window.print()}>Print</Button></>}>

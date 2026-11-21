@@ -52,11 +52,14 @@ export interface Employee {
   bank_name: string | null; bank_account: string | null; ifsc: string | null;
   basic: number; hra: number; conveyance: number; special_allowance: number; other_allowance: number;
   pf_applicable: boolean; esi_applicable: boolean; status: "active" | "inactive"; branch_id: string | null;
+  gender?: "M" | "F" | "O" | "" | null; date_of_birth?: string | null; address?: string | null; qualification?: string | null;
+  work_type?: "permanent" | "temporary" | "" | null;
 }
 
 export interface Branch {
   id: string; firm_id: string; name: string; address: string | null; created_at: string;
   lat: number | null; lng: number | null; radius_m: number;
+  code?: string | null; phone?: string | null; opened_on?: string | null;
 }
 
 export type AttStatus = "present" | "absent" | "half_day" | "paid_leave" | "unpaid_leave" | "holiday" | "week_off";
